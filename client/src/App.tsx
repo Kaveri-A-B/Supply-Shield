@@ -1,14 +1,79 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Box, CalendarDays,
+  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Box,
   Check, ChevronDown, ChevronRight, CircleHelp, Clock3, Cloud,
-  Download, Filter, LayoutDashboard, Menu, MoreHorizontal,
+  Download, LayoutDashboard, LogOut, Menu,
   PackageCheck, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Truck, Users, X,
 } from 'lucide-react'
-import { initialAlerts, initialShipments, inventory, type Alert, type Shipment } from './data'
+import { type Alert, type InventoryItem, type Shipment, type Supplier } from './data'
 
 type Section = 'Overview' | 'Shipments' | 'Inventory' | 'Suppliers' | 'Alerts' | 'What-if' | 'Model & data' | 'Branding'
+type RecordKind = 'shipments' | 'inventory' | 'suppliers' | 'alerts'
+type ManagedRecord = { id: string; [key: string]: unknown }
+
+type RecordField = {
+  name: string
+  label: string
+  type?: 'text' | 'number' | 'datetime-local' | 'select'
+  options?: string[]
+  min?: number
+  max?: number
+}
+
+const recordLabels: Record<RecordKind, string> = {
+  shipments: 'shipment',
+  inventory: 'inventory item',
+  suppliers: 'supplier',
+  alerts: 'alert',
+}
+
+const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordField[] }> = {
+  shipments: {
+    endpoint: '/api/shipments',
+    fields: [
+      { name: 'id', label: 'Shipment ID' },
+      { name: 'supplier', label: 'Supplier' },
+      { name: 'route', label: 'Route' },
+      { name: 'carrier', label: 'Carrier' },
+      { name: 'eta', label: 'Estimated arrival', type: 'datetime-local' },
+      { name: 'status', label: 'Status', type: 'select', options: ['On track', 'At risk', 'Delayed'] },
+      { name: 'risk', label: 'Risk score (entered value)', type: 'number', min: 0, max: 100 },
+      { name: 'initials', label: 'Supplier initials' },
+      { name: 'tone', label: 'Avatar color', type: 'select', options: ['violet', 'blue', 'orange', 'teal'] },
+    ],
+  },
+  inventory: {
+    endpoint: '/api/inventory',
+    fields: [
+      { name: 'item', label: 'Item' },
+      { name: 'detail', label: 'Location / details' },
+      { name: 'quantity', label: 'On hand', type: 'number', min: 0 },
+      { name: 'safetyStock', label: 'Safety stock', type: 'number', min: 0 },
+      { name: 'dailyDemand', label: 'Daily demand', type: 'number', min: 0 },
+    ],
+  },
+  suppliers: {
+    endpoint: '/api/suppliers',
+    fields: [
+      { name: 'name', label: 'Supplier name' },
+      { name: 'completedOrders', label: 'Completed orders', type: 'number', min: 0 },
+      { name: 'onTimeRate', label: 'On-time rate (%)', type: 'number', min: 0, max: 100 },
+      { name: 'fulfillmentRate', label: 'Fulfillment rate (%)', type: 'number', min: 0, max: 100 },
+      { name: 'reliabilityScore', label: 'Reliability score (entered value)', type: 'number', min: 0, max: 100 },
+    ],
+  },
+  alerts: {
+    endpoint: '/api/alerts',
+    fields: [
+      { name: 'id', label: 'Alert ID' },
+      { name: 'severity', label: 'Severity', type: 'select', options: ['High', 'Medium', 'Info'] },
+      { name: 'title', label: 'Title' },
+      { name: 'description', label: 'Description' },
+      { name: 'icon', label: 'Icon', type: 'select', options: ['box', 'cloud', 'truck'] },
+    ],
+  },
+}
 
 const sections: { label: Section; icon: typeof LayoutDashboard; group: string }[] = [
   { label: 'Overview', icon: LayoutDashboard, group: 'WORKSPACE' },
@@ -21,7 +86,29 @@ const sections: { label: Section; icon: typeof LayoutDashboard; group: string }[
   { label: 'Branding', icon: Sparkles, group: 'MANAGE' },
 ]
 
-const riskData = [22, 27, 24, 35, 29, 38, 33, 42, 36, 47, 42, 53, 47, 61, 55, 66, 59, 73, 68, 79, 73, 86, 79, 92]
+function toManagedRecords(records: Array<Shipment | Alert | InventoryItem | Supplier>): ManagedRecord[] {
+  return records.map(record => ({ ...record })) as ManagedRecord[]
+}
+
+async function apiRequest(path: string, init?: RequestInit) {
+  const response = await fetch(path, {
+    ...init,
+    credentials: 'same-origin',
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers,
+    },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error || `Request failed with status ${response.status}.`)
+  }
+  return response
+}
+
+async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  return await (await apiRequest(path, init)).json() as T
+}
 
 function escapeXml(value: string) {
   return value.replace(/[<>&'"]/g, character => {
@@ -67,12 +154,13 @@ function Logo({ small = false }: { small?: boolean }) {
   </div>
 }
 
-function TrendChart() {
-  const points = riskData.map((value, index) => `${(index / (riskData.length - 1)) * 720},${180 - value * 1.65}`).join(' ')
+function TrendChart({ values }: { values: number[] }) {
+  if (!values.length) return <div className="chart-empty">Add shipment records to display risk scores.</div>
+  const points = values.map((value, index) => `${values.length === 1 ? 360 : (index / (values.length - 1)) * 720},${180 - value * 1.65}`).join(' ')
   const area = `0,180 ${points} 720,180`
   return <div className="chart-wrap">
     <div className="chart-labels"><span>80</span><span>60</span><span>40</span><span>20</span></div>
-    <svg className="trend-chart" viewBox="0 0 720 190" preserveAspectRatio="none" role="img" aria-label="Risk trend increased over the last 30 days">
+    <svg className="trend-chart" viewBox="0 0 720 190" preserveAspectRatio="none" role="img" aria-label="Current shipment risk scores from the database">
       <defs>
         <linearGradient id="area-fill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor="#9cc94c" stopOpacity=".25" />
@@ -82,9 +170,9 @@ function TrendChart() {
       {[15, 65, 115, 165].map(y => <line key={y} x1="0" x2="720" y1={y} y2={y} className="chart-grid" />)}
       <polygon points={area} fill="url(#area-fill)" />
       <polyline points={points} fill="none" stroke="#709b39" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      <circle cx="720" cy={180 - riskData[riskData.length - 1] * 1.65} r="5" fill="#709b39" stroke="white" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+      <circle cx={values.length === 1 ? 360 : 720} cy={180 - values[values.length - 1] * 1.65} r="5" fill="#709b39" stroke="white" strokeWidth="3" vectorEffect="non-scaling-stroke" />
     </svg>
-    <div className="chart-dates"><span>Oct 01</span><span>Oct 06</span><span>Oct 11</span><span>Oct 16</span><span>Oct 21</span><span>Oct 28</span></div>
+    <div className="chart-dates"><span>Lower risk</span><span>Current shipment records</span><span>Higher risk</span></div>
   </div>
 }
 
@@ -99,29 +187,59 @@ function App() {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [shipments, setShipments] = useState<Shipment[]>(initialShipments)
-  const [alerts, setAlerts] = useState<Alert[]>(initialAlerts)
-  const [apiStatus, setApiStatus] = useState<'connected' | 'demo'>('demo')
+  const [shipments, setShipments] = useState<Shipment[]>([])
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [alertRecords, setAlertRecords] = useState<Alert[]>([])
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [authStatus, setAuthStatus] = useState<'loading' | 'signed-out' | 'signed-in'>('loading')
+  const [userEmail, setUserEmail] = useState('')
+  const [apiError, setApiError] = useState('')
   const [toast, setToast] = useState('')
-  const [period, setPeriod] = useState('Last 30 days')
   const [logoColor, setLogoColor] = useState('#d9f36a')
   const [logoText, setLogoText] = useState('SupplyShield')
   const [logoStyle, setLogoStyle] = useState('Shield + route')
 
+  async function loadWorkspace() {
+    const [shipmentData, inventoryData, supplierData, alertData] = await Promise.all([
+      apiJson<Shipment[]>('/api/shipments'),
+      apiJson<InventoryItem[]>('/api/inventory'),
+      apiJson<Supplier[]>('/api/suppliers'),
+      apiJson<Alert[]>('/api/alerts'),
+    ])
+    setShipments(shipmentData)
+    setAlerts(alertData.filter(alert => !alert.acknowledged))
+    setAlertRecords(alertData)
+    setInventoryItems(inventoryData)
+    setSuppliers(supplierData)
+    setApiError('')
+  }
+
   useEffect(() => {
     let active = true
-    fetch('/api/dashboard')
-      .then(response => {
-        if (!response.ok) throw new Error('Dashboard API unavailable')
-        return response.json()
-      })
-      .then(data => {
+    async function initialize() {
+      try {
+        const session = await apiJson<{ authenticated: boolean; email: string | null }>('/api/auth/session')
         if (!active) return
-        if (Array.isArray(data.shipments)) setShipments(data.shipments)
-        if (Array.isArray(data.alerts)) setAlerts(data.alerts)
-        setApiStatus('connected')
-      })
-      .catch(() => { if (active) setApiStatus('demo') })
+        if (!session.authenticated) {
+          setAuthStatus('signed-out')
+          return
+        }
+        setUserEmail(session.email || '')
+        setAuthStatus('signed-in')
+        try {
+          await loadWorkspace()
+        } catch (error) {
+          if (active) setApiError(error instanceof Error ? error.message : 'Could not load database records.')
+        }
+      } catch (error) {
+        if (active) {
+          setApiError(error instanceof Error ? error.message : 'Could not connect to the server.')
+          setAuthStatus('signed-out')
+        }
+      }
+    }
+    void initialize()
     return () => { active = false }
   }, [])
 
@@ -134,17 +252,45 @@ function App() {
   const filteredShipments = useMemo(() => shipments.filter(item =>
     `${item.id} ${item.supplier} ${item.route} ${item.carrier}`.toLowerCase().includes(query.toLowerCase())), [shipments, query])
   const activeAlerts = alerts.length
-  const title = section === 'Overview' ? 'Good morning, Alex' : section
+  const title = section === 'Overview' ? `Good morning, ${userEmail.split('@')[0] || 'there'}` : section
   const description = section === 'Overview'
     ? 'Here’s what’s happening across your supply chain today.'
     : section === 'Branding'
       ? 'Make the SupplyShield mark your own.'
       : `Monitor and manage your ${section.toLowerCase()} across the network.`
 
-  function acknowledge(alertId: string) {
-    setAlerts(current => current.filter(alert => alert.id !== alertId))
-    setToast('Alert acknowledged and removed from your active queue.')
-    fetch(`/api/alerts/${alertId}/acknowledge`, { method: 'POST' }).catch(() => undefined)
+  async function handleLogin(email: string, password: string) {
+    await apiJson('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+    await loadWorkspace()
+    setUserEmail(email)
+    setAuthStatus('signed-in')
+  }
+
+  async function logout() {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' })
+      setAuthStatus('signed-out')
+      setShipments([])
+      setAlerts([])
+      setAlertRecords([])
+      setInventoryItems([])
+      setSuppliers([])
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Sign out failed.')
+    }
+  }
+
+  async function acknowledge(alertId: string) {
+    try {
+      await apiRequest(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'PATCH' })
+      await loadWorkspace()
+      setToast('Alert acknowledgement saved.')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Could not acknowledge the alert.')
+    }
   }
 
   function downloadLogo(format: 'svg' | 'png' | 'ico') {
@@ -194,11 +340,18 @@ function App() {
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgForImage)}`
   }
 
+  if (authStatus === 'loading') {
+    return <main className="auth-page"><div className="auth-card"><Logo /><p>Checking secure sign-in…</p></div></main>
+  }
+  if (authStatus === 'signed-out') {
+    return <LoginScreen onLogin={handleLogin} initialError={apiError} />
+  }
+
   return <div className="app-shell">
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-top">
         <div className="brand-row"><Logo /><button className="icon-btn sidebar-close" aria-label="Close navigation" onClick={() => setSidebarOpen(false)}><X size={19} /></button></div>
-        <button className="workspace-switch"><span className="workspace-avatar">N</span><span className="workspace-meta"><strong>Northstar Health</strong><small>Operations team</small></span><ChevronDown size={16} /></button>
+        <button className="workspace-switch"><span className="workspace-avatar">S</span><span className="workspace-meta"><strong>SupplyShield</strong><small>Administrator workspace</small></span><ChevronDown size={16} /></button>
       </div>
       <nav className="nav-list" aria-label="Main navigation">
         {(['WORKSPACE', 'MONITOR', 'MANAGE'] as const).map(group => <div className="nav-group" key={group}>
@@ -217,11 +370,11 @@ function App() {
           <div className="plan-icon"><Sparkles size={16} /></div>
           <strong>Supply chain, in sync.</strong>
           <p>Make every decision with a clearer picture.</p>
-          <button onClick={() => setToast('Your workspace is running on synthetic demo data.')}>Explore insights <ArrowRight size={14} /></button>
+          <button onClick={() => setSection('Model & data')}>Explore data status <ArrowRight size={14} /></button>
           <div className="plan-orb orb-one" /><div className="plan-orb orb-two" />
         </div>
         <button className="nav-item support-item" onClick={() => setToast('Help center is coming soon.')}><CircleHelp size={18} /><span>Help & support</span><span className="support-shortcut">?</span></button>
-        <div className="profile-row"><div className="profile-avatar">AM</div><div className="profile-meta"><strong>Alex Morgan</strong><small>Supply chain manager</small></div><MoreHorizontal size={19} /></div>
+        <div className="profile-row"><div className="profile-avatar">{userEmail.slice(0, 2).toUpperCase()}</div><div className="profile-meta"><strong>{userEmail}</strong><small>Administrator</small></div><button className="icon-btn signout-button" aria-label="Sign out" onClick={() => void logout()}><LogOut size={17} /></button></div>
       </div>
     </aside>
 
@@ -230,18 +383,19 @@ function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{section}</strong></div></div>
         <div className="topbar-actions">
-          <div className={`data-status ${apiStatus}`}><span className="status-dot" />{apiStatus === 'connected' ? 'Live demo API' : 'Synthetic demo'}<span className="status-divider">·</span><span>Updated just now</span></div>
+          <div className={`data-status ${apiError ? 'demo' : 'connected'}`}><span className="status-dot" />{apiError ? 'Database unavailable' : 'MongoDB connected'}<span className="status-divider">·</span><span>Protected workspace</span></div>
           <button className="topbar-icon" aria-label="Search" onClick={() => setSearchOpen(!searchOpen)}><Search size={19} /></button>
           <button className="topbar-icon notification-button" aria-label={`${activeAlerts} notifications`} onClick={() => setSection('Alerts')}><Bell size={19} />{activeAlerts > 0 && <span className="notification-dot" />}</button>
-          <div className="topbar-avatar">AM</div>
+          <div className="topbar-avatar">{userEmail.slice(0, 2).toUpperCase()}</div>
         </div>
       </header>
       {searchOpen && <div className="global-search"><Search size={17} /><input autoFocus placeholder="Search shipments, suppliers, or items…" value={query} onChange={event => setQuery(event.target.value)} /><kbd>ESC</kbd><button className="icon-btn" onClick={() => { setSearchOpen(false); setQuery('') }} aria-label="Close search"><X size={16} /></button></div>}
 
       <div className="content">
+        {apiError && <div className="api-error" role="alert">{apiError} <button onClick={() => void loadWorkspace().catch(error => setApiError(error instanceof Error ? error.message : 'Could not load database records.'))}>Retry</button></div>}
         <div className="page-heading">
-          <div><div className="eyebrow"><span className="eyebrow-line" /> TUESDAY, OCTOBER 28, 2026</div><h1>{title}<span className="wave">✳</span></h1><p>{description}</p></div>
-          <div className="heading-actions"><button className="button button-outline" onClick={() => setToast('Report prepared for your workspace.') }><Download size={16} /> Export report</button><button className="button button-dark" onClick={() => setToast('New shipment workflow opened.') }><Plus size={17} /> New shipment</button></div>
+          <div><div className="eyebrow"><span className="eyebrow-line" /> MONGODB · ADMIN WORKSPACE</div><h1>{title}<span className="wave">✳</span></h1><p>{description}</p></div>
+          <div className="heading-actions"><button className="button button-outline" onClick={() => setToast('Report export is not implemented yet.') }><Download size={16} /> Export report</button><button className="button button-dark" onClick={() => setSection('Shipments')}><Plus size={17} /> Manage shipments</button></div>
         </div>
 
         {section === 'Branding' ? <section className="branding-layout">
@@ -258,25 +412,25 @@ function App() {
             <div className="preview-footer"><span><span className="preview-dot" /> {logoStyle}</span><span>360 × 96 px</span></div>
           </div>
         </section> : section !== 'Overview' ? <section className="panel module-panel">
-          <div className="panel-heading"><div><h2>{section} overview</h2><p>Live workspace view · clearly labeled synthetic demo records</p></div><button className="button button-outline button-small" onClick={() => setToast(`${section} filters opened.`)}><Filter size={15} /> Filters</button></div>
-          {section === 'Alerts' ? <AlertList alerts={alerts} onAcknowledge={acknowledge} /> :
-            section === 'Shipments' ? <ShipmentTable shipments={filteredShipments} onView={id => setToast(`Opening details for ${id}`)} /> :
-              section === 'Inventory' ? <InventoryTable /> :
-                section === 'Suppliers' ? <SupplierTable /> :
-                  section === 'What-if' ? <WhatIfPanel /> : <ModelDataPanel />}
+          <div className="panel-heading"><div><h2>{section} overview</h2><p>Records saved in MongoDB · changes require administrator sign-in</p></div></div>
+          {section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
+            section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} onChanged={loadWorkspace} /> :
+              section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} onChanged={loadWorkspace} /> :
+                section === 'Suppliers' ? <RecordManager kind="suppliers" records={suppliers} onChanged={loadWorkspace} /> :
+                  section === 'What-if' ? <WhatIfPanel items={inventoryItems} /> : <ModelDataPanel />}
         </section> : <>
           <section className="metric-grid" aria-label="Supply chain metrics">
-            <MetricCard title="On-time delivery" value="94.2%" change="+2.4%" positive caption="vs. last 30 days" icon={<PackageCheck size={18} />} bars={[28, 40, 35, 51, 45, 61, 55, 74, 68, 82]} />
-            <MetricCard title="Shipments at risk" value="12" change="+3" positive={false} caption="vs. last 30 days" icon={<Truck size={18} />} bars={[27, 34, 30, 48, 37, 55, 46, 63, 57, 78]} />
-            <MetricCard title="Inventory coverage" value="18.6" suffix=" days" change="−1.2d" positive={false} caption="vs. last 30 days" icon={<Box size={18} />} bars={[70, 63, 72, 56, 61, 48, 55, 40, 45, 36]} />
-            <MetricCard title="Supplier health" value="87" suffix="/100" change="+4 pts" positive caption="vs. last 30 days" icon={<Users size={18} />} bars={[34, 39, 43, 40, 52, 48, 59, 62, 70, 79]} />
+            <MetricCard title="On-time delivery" value={suppliers.length ? `${(suppliers.reduce((sum, item) => sum + Number.parseFloat(item.onTime), 0) / suppliers.length).toFixed(1)}%` : '—'} change={`${suppliers.length} suppliers`} positive caption="database records" icon={<PackageCheck size={18} />} />
+            <MetricCard title="Shipments at risk" value={String(shipments.filter(item => item.risk >= 70).length)} change={`${shipments.length} total`} positive={false} caption="current records" icon={<Truck size={18} />} />
+            <MetricCard title="Inventory coverage" value={inventoryItems.some(item => item.cover !== null) ? (inventoryItems.reduce((sum, item) => sum + (item.cover ?? 0), 0) / inventoryItems.filter(item => item.cover !== null).length).toFixed(1) : '—'} suffix=" days" change={`${inventoryItems.length} items`} positive={false} caption="database records" icon={<Box size={18} />} />
+            <MetricCard title="Supplier health" value={suppliers.length ? (suppliers.reduce((sum, item) => sum + item.score, 0) / suppliers.length).toFixed(0) : '—'} suffix="/100" change={`${suppliers.length} suppliers`} positive caption="database records" icon={<Users size={18} />} />
           </section>
           <section className="dashboard-grid">
             <div className="panel risk-panel">
-              <div className="panel-heading chart-heading"><div><div className="title-with-info"><h2>Supply chain risk</h2><button className="info-button" aria-label="Risk trend information"><CircleHelp size={15} /></button></div><p>Network-wide disruption signals over time</p></div><button className="select-button" onClick={() => setPeriod(period === 'Last 30 days' ? 'Last 7 days' : 'Last 30 days')}><CalendarDays size={15} />{period}<ChevronDown size={14} /></button></div>
-              <div className="risk-summary"><div><span className="summary-number">24</span><span className="summary-label">active risk signals</span></div><span className="summary-change"><ArrowUpRight size={14} /> 8.3% <span>vs. prior period</span></span></div>
-              <TrendChart />
-              <div className="chart-legend"><span><i className="legend-line" /> Risk signals</span><span className="chart-note">Rules + ML · Probability is model-derived</span></div>
+              <div className="panel-heading chart-heading"><div><div className="title-with-info"><h2>Current shipment risk</h2><button className="info-button" aria-label="Risk score information"><CircleHelp size={15} /></button></div><p>Scores entered on current shipment records</p></div><span className="tool-pill">{shipments.length} records</span></div>
+              <div className="risk-summary"><div><span className="summary-number">{shipments.filter(item => item.risk >= 70).length}</span><span className="summary-label">high-risk shipments (70+)</span></div></div>
+              <TrendChart values={shipments.slice(0, 24).map(item => item.risk)} />
+              <div className="chart-legend"><span><i className="legend-line" /> Risk score</span><span className="chart-note">Entered record values · Not a model prediction</span></div>
             </div>
             <div className="panel alerts-panel">
               <div className="panel-heading"><div><h2>Needs attention <span className="heading-count">{activeAlerts}</span></h2><p>Priority items to review</p></div><button className="text-link" onClick={() => setSection('Alerts')}>View all <ArrowRight size={14} /></button></div>
@@ -286,20 +440,20 @@ function App() {
           </section>
           <section className="bottom-grid">
             <div className="panel shipments-panel">
-              <div className="panel-heading"><div><div className="title-with-info"><h2>Shipment activity</h2><span className="table-count">12 active</span></div><p>Your most recent shipments across all routes</p></div><button className="text-link" onClick={() => setSection('Shipments')}>All shipments <ArrowRight size={14} /></button></div>
+              <div className="panel-heading"><div><div className="title-with-info"><h2>Shipment activity</h2><span className="table-count">{shipments.length} records</span></div><p>Your most recent shipments across all routes</p></div><button className="text-link" onClick={() => setSection('Shipments')}>All shipments <ArrowRight size={14} /></button></div>
               <ShipmentTable shipments={filteredShipments.slice(0, 4)} onView={id => setToast(`Opening details for ${id}`)} />
             </div>
             <div className="panel inventory-panel">
               <div className="panel-heading"><div><h2>Inventory watchlist</h2><p>Items nearing safety stock</p></div><button className="text-link" onClick={() => setSection('Inventory')}>View all <ArrowRight size={14} /></button></div>
-              <div className="inventory-list">{inventory.slice(0, 3).map((item, index) => <div className="inventory-item" key={item.item}>
+              <div className="inventory-list">{inventoryItems.slice(0, 3).map((item, index) => <div className="inventory-item" key={item.id}>
                 <div className={`inventory-glyph glyph-${index}`}><Box size={16} /></div>
                 <div className="inventory-info"><div className="inventory-name">{item.item}</div><div className="inventory-location">{item.detail}</div></div>
-                <div className="inventory-cover"><strong>{item.cover}</strong><span>days</span><span className={`mini-status ${item.status.toLowerCase()}`}>{item.status}</span></div>
+                <div className="inventory-cover"><strong>{item.cover ?? '—'}</strong><span>days</span><span className={`mini-status ${item.status.toLowerCase()}`}>{item.status}</span></div>
               </div>)}</div>
-              <div className="inventory-foot"><span>3 items need attention</span><button onClick={() => setSection('Inventory')}>Review inventory <ArrowRight size={14} /></button></div>
+              <div className="inventory-foot"><span>{inventoryItems.length} inventory records</span><button onClick={() => setSection('Inventory')}>Review inventory <ArrowRight size={14} /></button></div>
             </div>
           </section>
-          <div className="footer-note"><ShieldCheck size={15} /><span>Decision support, not automated action.</span><span className="footer-divider">·</span><span>Always review source evidence before acting.</span><button onClick={() => setToast('Demo workspace uses synthetic data. No live operational data is connected.')}>About this demo</button></div>
+          <div className="footer-note"><ShieldCheck size={15} /><span>Decision support, not automated action.</span><span className="footer-divider">·</span><span>Risk values are manually entered; no prediction model is connected.</span><button onClick={() => setToast('MongoDB stores the records entered by an authenticated administrator.')}>About this workspace</button></div>
         </>}
       </div>
     </main>
@@ -307,15 +461,13 @@ function App() {
   </div>
 }
 
-function MetricCard({ title, value, suffix, change, positive, caption, icon, bars }: {
-  title: string; value: string; suffix?: string; change: string; positive: boolean; caption: string; icon: ReactNode; bars: number[]
+function MetricCard({ title, value, suffix, change, positive, caption, icon }: {
+  title: string; value: string; suffix?: string; change: string; positive: boolean; caption: string; icon: ReactNode
 }) {
   return <article className="panel metric-card">
     <div className="metric-top"><span className="metric-title">{title}</span><span className="metric-icon">{icon}</span></div>
     <div className="metric-value">{value}<span>{suffix}</span></div>
-    <div className="metric-bottom"><span className={`metric-change ${positive ? 'change-positive' : 'change-negative'}`}>{positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{change}</span><span className="metric-caption">{caption}</span>
-      <div className="sparkline" aria-hidden="true">{bars.map((bar, i) => <i key={i} style={{ height: `${bar}%` }} />)}</div>
-    </div>
+    <div className="metric-bottom"><span className={`metric-change ${positive ? 'change-positive' : 'change-negative'}`}>{positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{change}</span><span className="metric-caption">{caption}</span></div>
   </article>
 }
 
@@ -329,7 +481,7 @@ function AlertList({ alerts, onAcknowledge, compact = false }: { alerts: Alert[]
 }
 
 function ShipmentTable({ shipments, onView }: { shipments: Shipment[]; onView: (id: string) => void }) {
-  if (!shipments.length) return <div className="empty-state"><Search size={21} /><strong>No matching shipments</strong><span>Try another search term.</span></div>
+  if (!shipments.length) return <div className="empty-state"><Search size={21} /><strong>No shipment records</strong><span>Add shipments from the Shipments page.</span></div>
   return <div className="table-scroll"><table className="shipment-table"><thead><tr><th>SHIPMENT</th><th>ROUTE / CARRIER</th><th>ETA</th><th>STATUS</th><th>RISK</th><th aria-label="Actions" /></tr></thead><tbody>
     {shipments.map(shipment => <tr key={shipment.id} onClick={() => onView(shipment.id)} tabIndex={0} onKeyDown={event => { if (event.key === 'Enter') onView(shipment.id) }}>
       <td><div className="shipment-identity"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><span><strong>{shipment.id}</strong><small>{shipment.supplier}</small></span></div></td>
@@ -342,42 +494,164 @@ function ShipmentTable({ shipments, onView }: { shipments: Shipment[]; onView: (
   </tbody></table></div>
 }
 
-function InventoryTable() {
-  return <div className="table-scroll"><table className="shipment-table module-table"><thead><tr><th>ITEM / LOCATION</th><th>ON HAND</th><th>SAFETY STOCK</th><th>DAYS OF COVER</th><th>STATUS</th></tr></thead><tbody>
-    {inventory.map(item => <tr key={item.item}><td><div className="route-text">{item.item}</div><small className="carrier-text">{item.detail}</small></td><td className="eta-text">{item.quantity}</td><td className="eta-text">{item.status === 'Critical' ? '3,000' : '1,200'}</td><td><strong className={item.cover <= 7 ? 'cover-critical' : ''}>{item.cover} days</strong></td><td><span className={`inventory-tag tag-${item.status.toLowerCase()}`}>{item.status}</span></td></tr>)}
-  </tbody></table></div>
+function LoginScreen({ onLogin, initialError }: {
+  onLogin: (email: string, password: string) => Promise<void>
+  initialError: string
+}) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState(initialError)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await onLogin(email, password)
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : 'Sign-in failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="auth-page">
+    <form className="auth-card" onSubmit={event => void submit(event)}>
+      <Logo />
+      <h1>Administrator sign in</h1>
+      <p>Sign in to access the protected SupplyShield workspace.</p>
+      <label className="field-label" htmlFor="admin-email">Email</label>
+      <input id="admin-email" className="text-field" type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} />
+      <label className="field-label" htmlFor="admin-password">Password</label>
+      <input id="admin-password" className="text-field" type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} />
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <button className="button button-dark auth-submit" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <p className="privacy-note"><ShieldCheck size={15} /> Credentials are verified by the server and never stored in the browser.</p>
+    </form>
+  </main>
 }
 
-function SupplierTable() {
-  const suppliers = [
-    { name: 'Medline Industries', orders: 128, onTime: '96.1%', fulfillment: '98.4%', score: 94, tone: 'violet', initials: 'MI' },
-    { name: 'Cardinal Health', orders: 96, onTime: '92.7%', fulfillment: '97.2%', score: 89, tone: 'blue', initials: 'CH' },
-    { name: 'Owens & Minor', orders: 74, onTime: '89.3%', fulfillment: '95.8%', score: 85, tone: 'teal', initials: 'OM' },
-    { name: 'Baxter International', orders: 8, onTime: '75.0%', fulfillment: '91.2%', score: 76, tone: 'orange', initials: 'BI' },
-  ]
-  return <div className="table-scroll"><table className="shipment-table module-table"><thead><tr><th>SUPPLIER</th><th>COMPLETED ORDERS</th><th>ON-TIME RATE</th><th>FULFILLMENT</th><th>RELIABILITY</th></tr></thead><tbody>
-    {suppliers.map(supplier => <tr key={supplier.name}><td><div className="shipment-identity"><span className={`supplier-avatar avatar-${supplier.tone}`}>{supplier.initials}</span><span><strong>{supplier.name}</strong><small>Delivery performance</small></span></div></td><td className="eta-text">{supplier.orders} <small className="carrier-text">{supplier.orders < 10 ? 'Insufficient sample' : 'Past 90 days'}</small></td><td className="eta-text">{supplier.onTime}</td><td className="eta-text">{supplier.fulfillment}</td><td><div className="supplier-score"><strong>{supplier.score}</strong><span>/100</span></div></td></tr>)}
-  </tbody></table><p className="table-disclaimer">Reliability score uses delivery history; suppliers below 10 completed orders are not comparable.</p></div>
+function RecordManager({ kind, records, onChanged, onAcknowledge }: {
+  kind: RecordKind
+  records: Array<Shipment | Alert | InventoryItem | Supplier>
+  onChanged: () => Promise<void>
+  onAcknowledge?: (id: string) => Promise<void>
+}) {
+  const definition = recordDefinitions[kind]
+  const managedRecords = toManagedRecords(records)
+  const [editing, setEditing] = useState<ManagedRecord | null | undefined>(undefined)
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  function openForm(record?: ManagedRecord) {
+    const formValues: Record<string, string> = {}
+    for (const field of definition.fields) {
+      const current = record?.[field.name]
+      const value = current === undefined || current === null ? '' : String(current)
+      formValues[field.name] = field.type === 'datetime-local' && value
+        ? new Date(value).toISOString().slice(0, 16)
+        : value
+    }
+    setValues(formValues)
+    setEditing(record ?? null)
+    setError('')
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const payload = Object.fromEntries(definition.fields
+      .filter(field => !(editing && (field.name === 'id')))
+      .map(field => {
+        const value = values[field.name] ?? ''
+        if (field.type === 'number') return [field.name, Number(value)]
+        if (field.type === 'datetime-local') return [field.name, new Date(value).toISOString()]
+        return [field.name, value]
+      }))
+    try {
+      const url = editing
+        ? `${definition.endpoint}/${encodeURIComponent(editing.id)}`
+        : definition.endpoint
+      await apiRequest(url, { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
+      setEditing(undefined)
+      await onChanged()
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save this record.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(record: ManagedRecord) {
+    if (!window.confirm(`Delete this ${kind.slice(0, -1)} record? This cannot be undone.`)) return
+    try {
+      await apiRequest(`${definition.endpoint}/${encodeURIComponent(record.id)}`, { method: 'DELETE' })
+      await onChanged()
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'Could not delete this record.')
+    }
+  }
+
+  return <div className="record-manager">
+    <div className="record-toolbar">
+      <span>{records.length} saved record{records.length === 1 ? '' : 's'}</span>
+      <button className="button button-dark button-small" onClick={() => openForm()}><Plus size={15} /> Add {recordLabels[kind]}</button>
+    </div>
+    {error && !editing && <p className="form-error" role="alert">{error}</p>}
+    {records.length === 0 ? <div className="empty-state"><Search size={21} /><strong>No {recordLabels[kind]} records yet</strong><span>Add a record or load a verified dataset to get started.</span></div> :
+      <div className="table-scroll"><table className="shipment-table module-table">
+        <thead><tr>{definition.fields.map(field => <th key={field.name}>{field.label.toUpperCase()}</th>)}<th>ACTIONS</th></tr></thead>
+        <tbody>{managedRecords.map(record => <tr key={record.id}>
+          {definition.fields.map(field => <td key={field.name}>{String(record[field.name] ?? '—')}</td>)}
+          <td className="record-actions">
+            {kind === 'alerts' && record.acknowledged !== true && onAcknowledge && <button className="button button-outline button-small" onClick={() => void onAcknowledge(record.id)}>Acknowledge</button>}
+            <button className="button button-outline button-small" onClick={() => openForm(record)}>Edit</button>
+            <button className="button button-outline button-small" onClick={() => void remove(record)}>Delete</button>
+          </td>
+        </tr>)}</tbody>
+      </table></div>}
+    {editing !== undefined && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(undefined) }}>
+      <form className="record-form" onSubmit={event => void save(event)}>
+        <div className="panel-heading"><div><h2>{editing ? 'Edit' : 'Add'} {recordLabels[kind]}</h2><p>Saved securely to the connected database.</p></div><button className="icon-btn" type="button" aria-label="Close form" onClick={() => setEditing(undefined)}><X size={17} /></button></div>
+        {definition.fields.map(field => <label className="record-field" key={field.name}>{field.label}
+          {field.type === 'select'
+            ? <select className="text-field" required value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))}>
+              <option value="" disabled>Select…</option>{field.options?.map(option => <option key={option}>{option}</option>)}
+            </select>
+            : <input className="text-field" type={field.type || 'text'} required min={field.min} max={field.max} step={field.type === 'number' ? 'any' : undefined} disabled={Boolean(editing) && field.name === 'id'} value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))} />}
+        </label>)}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <div className="record-form-actions"><button className="button button-outline" type="button" onClick={() => setEditing(undefined)}>Cancel</button><button className="button button-dark" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save record'}</button></div>
+      </form>
+    </div>}
+  </div>
 }
 
-function WhatIfPanel() {
+function WhatIfPanel({ items }: { items: InventoryItem[] }) {
   const [delay, setDelay] = useState(3)
   const [demandIncrease, setDemandIncrease] = useState(20)
-  const projectedCover = Math.max(0, Math.round(5 / (1 + demandIncrease / 100) - delay / 3))
+  const selectedItem = items[0]
+  const currentCover = selectedItem?.cover ?? null
+  const projectedCover = currentCover === null
+    ? null
+    : Math.max(0, Math.round(currentCover / (1 + demandIncrease / 100) - delay / 3))
   return <div className="scenario-layout">
     <div className="scenario-controls"><div className="field-label">Scenario type</div><select className="text-field" defaultValue="Delivery delay"><option>Delivery delay</option><option>Demand increase</option><option>Supplier disruption</option></select>
       <label className="field-label" htmlFor="delay-days">Shipment delay (days)</label><input id="delay-days" className="text-field" type="number" min="0" max="90" value={delay} onChange={event => setDelay(Math.max(0, Number(event.target.value)))} />
       <label className="field-label" htmlFor="demand-percent">Demand increase (%)</label><input id="demand-percent" className="text-field" type="number" min="0" max="300" value={demandIncrease} onChange={event => setDemandIncrease(Math.max(0, Number(event.target.value)))} />
       <p className="privacy-note"><ShieldCheck size={15} /> Simulation only. Live records and alerts are not changed.</p>
     </div>
-    <div className="scenario-results"><span className="tool-pill"><Activity size={14} /> SIMULATED OUTCOME</span><h3>Boston Central · Nitrile gloves</h3><p>Estimated impact based on current synthetic inventory snapshot.</p><div className="scenario-metrics"><div><span>Current coverage</span><strong>5 days</strong></div><ArrowRight size={17} /><div className="scenario-impact"><span>Projected coverage</span><strong>{projectedCover} days</strong></div></div><div className="scenario-warning"><span className="status-dot" />{projectedCover <= 3 ? 'Potential stockout before replenishment. Review assumptions and source records.' : 'Coverage remains above the example safety threshold.'}</div><small>Illustrative arithmetic only · No predictive model used</small></div>
+    <div className="scenario-results"><span className="tool-pill"><Activity size={14} /> SIMULATED OUTCOME</span><h3>{selectedItem ? `${selectedItem.detail} · ${selectedItem.item}` : 'No inventory records'}</h3><p>Scenario arithmetic based on the first inventory record currently in MongoDB.</p><div className="scenario-metrics"><div><span>Current coverage</span><strong>{currentCover === null ? 'Not calculable' : `${currentCover} days`}</strong></div><ArrowRight size={17} /><div className="scenario-impact"><span>Projected coverage</span><strong>{projectedCover === null ? '—' : `${projectedCover} days`}</strong></div></div><div className="scenario-warning"><span className="status-dot" />{projectedCover === null ? 'Add an inventory item with positive daily demand to run this scenario.' : projectedCover <= 3 ? 'Potential stockout before replenishment. Review source records.' : 'Coverage remains above the illustrative 3-day threshold.'}</div><small>Illustrative arithmetic only · No predictive model used</small></div>
   </div>
 }
 
 function ModelDataPanel() {
   return <div className="model-data-grid">
-    <div className="model-status-card"><span className="tool-pill"><Activity size={14} /> MODEL STATUS</span><div className="model-status-title"><span className="model-status-dot" /> ML inference unavailable</div><p>This prototype has no trained model artifact. Risk indicators shown elsewhere are illustrative demo values, not model predictions.</p><div className="model-fallback"><ShieldCheck size={16} /><span>Rule-only fallback is the required safe behavior when a model is unavailable.</span></div></div>
-    <div className="model-status-card"><span className="tool-pill"><Box size={14} /> DATA PROVENANCE</span><div className="model-status-title">Synthetic demo dataset</div><p>Seeded records are for interface exploration only and are not evidence of real-world performance.</p><div className="model-fallback"><Clock3 size={16} /><span>Last updated just now · source: SupplyShield demo fixtures</span></div></div>
+    <div className="model-status-card"><span className="tool-pill"><Activity size={14} /> MODEL STATUS</span><div className="model-status-title"><span className="model-status-dot" /> No prediction model connected</div><p>Shipment risk values are entered manually by an administrator. This app does not calculate disruption probabilities.</p><div className="model-fallback"><ShieldCheck size={16} /><span>The app does not take automated operational actions.</span></div></div>
+    <div className="model-status-card"><span className="tool-pill"><Box size={14} /> DATA PROVENANCE</span><div className="model-status-title">MongoDB operational records</div><p>No dataset has been imported yet. Add verified records manually; future CSV import should preserve source and validation information.</p><div className="model-fallback"><Clock3 size={16} /><span>Public supply-chain dataset loading is a separate follow-up step.</span></div></div>
   </div>
 }
 
