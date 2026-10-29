@@ -1,98 +1,20 @@
-import 'dotenv/config'
-import { createHmac, createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import cors from 'cors'
+import dotenv from 'dotenv'
 import express from 'express'
 import mongoose from 'mongoose'
-import { Alert, InventoryItem, Shipment, Supplier, calculateInventoryCoverage } from './models.js'
+import { Alert, InventoryItem, ReturnRequest, Shipment, Supplier, calculateInventoryCoverage, calculateReturnRating } from './models.js'
+
+dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) })
 
 const port = Number(process.env.PORT) || 4000
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
 const clientDist = fileURLToPath(new URL('../../client/dist', import.meta.url))
-const authSecret = process.env.AUTH_SECRET
-const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase()
-const adminPassword = process.env.ADMIN_PASSWORD
-const cookieName = 'supplyshield_session'
-const sessionDurationSeconds = 8 * 60 * 60
-const loginFailures = new Map()
-
-for (const [name, value] of Object.entries({
-  MONGODB_URI: process.env.MONGODB_URI,
-  AUTH_SECRET: authSecret,
-  ADMIN_EMAIL: adminEmail,
-  ADMIN_PASSWORD: adminPassword,
-})) {
-  if (!value) throw new Error(`${name} must be configured before the server can start.`)
-}
-if (authSecret.length < 32) throw new Error('AUTH_SECRET must contain at least 32 characters.')
-if (adminPassword.length < 12) throw new Error('ADMIN_PASSWORD must contain at least 12 characters.')
-
 const app = express()
 app.set('trust proxy', 1)
 app.disable('x-powered-by')
 app.use(cors({ origin: clientOrigin, credentials: true }))
 app.use(express.json({ limit: '100kb' }))
-
-function hash(value) {
-  return createHash('sha256').update(value).digest()
-}
-
-function signSession(email) {
-  const payload = Buffer.from(JSON.stringify({
-    email,
-    expiresAt: Date.now() + sessionDurationSeconds * 1000,
-  })).toString('base64url')
-  const signature = createHmac('sha256', authSecret).update(payload).digest('base64url')
-  return `${payload}.${signature}`
-}
-
-function getSession(request) {
-  const cookie = request.headers.cookie?.split(';')
-    .map(part => part.trim())
-    .find(part => part.startsWith(`${cookieName}=`))
-  const token = cookie?.slice(cookieName.length + 1)
-  if (!token) return null
-
-  const [payload, signature, extra] = token.split('.')
-  if (!payload || !signature || extra) return null
-
-  const expected = createHmac('sha256', authSecret).update(payload).digest()
-  let actual
-  try {
-    actual = Buffer.from(signature, 'base64url')
-  } catch {
-    return null
-  }
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null
-
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString())
-    if (typeof data.email !== 'string' || data.email !== adminEmail || data.expiresAt <= Date.now()) return null
-    return { email: data.email }
-  } catch {
-    return null
-  }
-}
-
-function requireAuth(request, response, next) {
-  const session = getSession(request)
-  if (!session) {
-    response.status(401).json({ error: 'Sign in is required.' })
-    return
-  }
-  request.user = session
-  next()
-}
-
-function setSessionCookie(response, token) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
-  response.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${sessionDurationSeconds}${secure}`)
-}
-
-function clearSessionCookie(response) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
-  response.setHeader('Set-Cookie', `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure}`)
-}
 
 function serializeShipment(document) {
   return {
@@ -117,6 +39,7 @@ function serializeInventory(document) {
     quantity: document.quantity,
     safetyStock: document.safetyStock,
     dailyDemand: document.dailyDemand,
+    suppliers: document.suppliers || [],
     cover,
     status,
   }
@@ -144,6 +67,18 @@ function serializeAlert(document) {
     time: document.createdAt.toISOString(),
     icon: document.icon,
     acknowledged: document.acknowledged,
+  }
+}
+
+function serializeReturnRequest(document) {
+  return {
+    id: document._id.toString(),
+    product: document.product,
+    supplier: document.supplier,
+    requestedAt: document.requestedAt.toISOString(),
+    completedAt: document.completedAt?.toISOString() ?? null,
+    dayLimit: document.dayLimit,
+    rating: calculateReturnRating(document.requestedAt, document.completedAt, document.dayLimit),
   }
 }
 
@@ -181,46 +116,17 @@ app.get('/api/health', (_request, response) => {
   })
 })
 
-app.get('/api/auth/session', (request, response) => {
-  const session = getSession(request)
-  response.json({ authenticated: Boolean(session), email: session?.email ?? null })
-})
-
-app.post('/api/auth/login', (request, response) => {
-  if (!isObjectBody(request.body) || typeof request.body.email !== 'string' || typeof request.body.password !== 'string') {
-    response.status(400).json({ error: 'Email and password are required.' })
+app.use('/api', (request, response, next) => {
+  if (request.path === '/health') {
+    next()
     return
   }
-  const now = Date.now()
-  for (const [ip, failure] of loginFailures) {
-    if (failure.resetAt <= now) loginFailures.delete(ip)
-  }
-  const failure = loginFailures.get(request.ip)
-  if (failure && failure.count >= 10) {
-    response.status(429).json({ error: 'Too many sign-in attempts. Try again in 15 minutes.' })
+  if (mongoose.connection.readyState !== 1) {
+    response.status(503).json({ error: 'Database is unavailable. Check the MongoDB connection and retry.' })
     return
   }
-  const emailMatches = timingSafeEqual(hash(request.body.email.trim().toLowerCase()), hash(adminEmail))
-  const passwordMatches = timingSafeEqual(hash(request.body.password), hash(adminPassword))
-  if (!emailMatches || !passwordMatches) {
-    loginFailures.set(request.ip, {
-      count: failure && failure.resetAt > now ? failure.count + 1 : 1,
-      resetAt: failure && failure.resetAt > now ? failure.resetAt : now + 15 * 60 * 1000,
-    })
-    response.status(401).json({ error: 'Email or password is incorrect.' })
-    return
-  }
-  loginFailures.delete(request.ip)
-  setSessionCookie(response, signSession(adminEmail))
-  response.json({ authenticated: true, email: adminEmail })
+  next()
 })
-
-app.post('/api/auth/logout', (_request, response) => {
-  clearSessionCookie(response)
-  response.status(204).end()
-})
-
-app.use('/api', requireAuth)
 
 app.get('/api/dashboard', async (_request, response, next) => {
   try {
@@ -294,21 +200,37 @@ app.get('/api/inventory', async (_request, response, next) => {
   }
 })
 
+function validateInventorySuppliers(body) {
+  if (body.suppliers === undefined) return null
+  if (!Array.isArray(body.suppliers) || body.suppliers.some(name =>
+    typeof name !== 'string' || name.trim().length === 0 || name.trim().length > 120)) {
+    return 'Suppliers must be an array of non-empty names of at most 120 characters.'
+  }
+  return null
+}
+
 app.post('/api/inventory', async (request, response, next) => {
-  const fields = ['item', 'detail', 'quantity', 'safetyStock', 'dailyDemand']
-  const issue = validateFields(request.body, fields, fields)
+  const fields = ['item', 'detail', 'quantity', 'safetyStock', 'dailyDemand', 'suppliers']
+  const issue = validateFields(request.body, fields, ['item', 'detail', 'quantity', 'safetyStock', 'dailyDemand'])
   if (issue) return response.status(400).json({ error: issue })
+  const supplierIssue = validateInventorySuppliers(request.body)
+  if (supplierIssue) return response.status(400).json({ error: supplierIssue })
   try {
-    response.status(201).json(serializeInventory(await InventoryItem.create(request.body)))
+    response.status(201).json(serializeInventory(await InventoryItem.create({
+      ...request.body,
+      suppliers: request.body.suppliers ?? [],
+    })))
   } catch (error) {
     next(error)
   }
 })
 
 app.patch('/api/inventory/:id', async (request, response, next) => {
-  const fields = ['item', 'detail', 'quantity', 'safetyStock', 'dailyDemand']
+  const fields = ['item', 'detail', 'quantity', 'safetyStock', 'dailyDemand', 'suppliers']
   const issue = validateFields(request.body, fields)
   if (issue) return response.status(400).json({ error: issue })
+  const supplierIssue = validateInventorySuppliers(request.body)
+  if (supplierIssue) return response.status(400).json({ error: supplierIssue })
   try {
     const document = await InventoryItem.findByIdAndUpdate(request.params.id, request.body, { new: true, runValidators: true })
     if (!document) return response.status(404).json({ error: 'Inventory item not found.' })
@@ -364,6 +286,75 @@ app.delete('/api/suppliers/:id', async (request, response, next) => {
   try {
     const document = await Supplier.findByIdAndDelete(request.params.id)
     if (!document) return response.status(404).json({ error: 'Supplier not found.' })
+    response.status(204).end()
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/returns', async (_request, response, next) => {
+  try {
+    response.json((await ReturnRequest.find().sort({ requestedAt: -1 })).map(serializeReturnRequest))
+  } catch (error) {
+    next(error)
+  }
+})
+
+function validateReturnDates(body) {
+  if (body.completedAt === null || body.completedAt === '') return null
+  if (body.completedAt !== undefined && body.requestedAt !== undefined) {
+    const requestedAt = new Date(body.requestedAt)
+    const completedAt = new Date(body.completedAt)
+    if (!Number.isNaN(requestedAt.valueOf()) && !Number.isNaN(completedAt.valueOf()) && completedAt < requestedAt) {
+      return 'Return completion cannot be before the request date.'
+    }
+  }
+  return null
+}
+
+app.post('/api/returns', async (request, response, next) => {
+  const fields = ['product', 'supplier', 'requestedAt', 'completedAt', 'dayLimit']
+  const issue = validateFields(request.body, fields, ['product', 'supplier', 'requestedAt', 'dayLimit'])
+  if (issue) return response.status(400).json({ error: issue })
+  if (!Number.isInteger(request.body.dayLimit) || request.body.dayLimit < 1 || request.body.dayLimit > 365) {
+    return response.status(400).json({ error: 'Return day limit must be a whole number from 1 to 365.' })
+  }
+  const dateIssue = validateReturnDates(request.body)
+  if (dateIssue) return response.status(400).json({ error: dateIssue })
+  try {
+    const document = await ReturnRequest.create({ ...request.body, completedAt: request.body.completedAt || null })
+    response.status(201).json(serializeReturnRequest(document))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/returns/:id', async (request, response, next) => {
+  const fields = ['product', 'supplier', 'requestedAt', 'completedAt', 'dayLimit']
+  const issue = validateFields(request.body, fields)
+  if (issue) return response.status(400).json({ error: issue })
+  if (request.body.dayLimit !== undefined && (!Number.isInteger(request.body.dayLimit) || request.body.dayLimit < 1 || request.body.dayLimit > 365)) {
+    return response.status(400).json({ error: 'Return day limit must be a whole number from 1 to 365.' })
+  }
+  const dateIssue = validateReturnDates(request.body)
+  if (dateIssue) return response.status(400).json({ error: dateIssue })
+  try {
+    const document = await ReturnRequest.findById(request.params.id)
+    if (!document) return response.status(404).json({ error: 'Return record not found.' })
+    for (const [field, value] of Object.entries(request.body)) {
+      document.set(field, field === 'completedAt' && value === '' ? null : value)
+    }
+    await document.save()
+    response.json(serializeReturnRequest(document))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/returns/:id', async (request, response, next) => {
+  try {
+    const document = await ReturnRequest.findByIdAndDelete(request.params.id)
+    if (!document) return response.status(404).json({ error: 'Return record not found.' })
     response.status(204).end()
   } catch (error) {
     next(error)
@@ -429,7 +420,14 @@ app.get('*', (_request, response) => {
 })
 app.use(sendDatabaseError)
 
-await mongoose.connect(process.env.MONGODB_URI)
 app.listen(port, () => {
-  console.log(`SupplyShield server listening on port ${port}. MongoDB is connected.`)
+  console.log(`SupplyShield server listening on port ${port}.`)
 })
+
+if (!process.env.MONGODB_URI) {
+  console.error('MONGODB_URI is not configured. API data operations are unavailable.')
+} else {
+  void mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('MongoDB is connected.'))
+    .catch(error => console.error('MongoDB connection failed:', error.message))
+}

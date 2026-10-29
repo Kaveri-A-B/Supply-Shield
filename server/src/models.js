@@ -18,6 +18,7 @@ const inventorySchema = new mongoose.Schema({
   quantity: { type: Number, min: 0, required: true },
   safetyStock: { type: Number, min: 0, required: true },
   dailyDemand: { type: Number, min: 0, required: true },
+  suppliers: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
 }, { timestamps: true })
 
 const supplierSchema = new mongoose.Schema({
@@ -27,6 +28,21 @@ const supplierSchema = new mongoose.Schema({
   fulfillmentRate: { type: Number, min: 0, max: 100, required: true },
   reliabilityScore: { type: Number, min: 0, max: 100, required: true },
 }, { timestamps: true })
+
+const returnRequestSchema = new mongoose.Schema({
+  product: { type: String, required: true, trim: true, maxlength: 160 },
+  supplier: { type: String, required: true, trim: true, maxlength: 120 },
+  requestedAt: { type: Date, required: true },
+  completedAt: { type: Date, default: null },
+  dayLimit: { type: Number, min: 1, max: 365, validate: Number.isInteger, required: true },
+}, { timestamps: true })
+
+returnRequestSchema.pre('validate', function validateReturnDates(next) {
+  if (this.completedAt && this.requestedAt && this.completedAt < this.requestedAt) {
+    this.invalidate('completedAt', 'Return completion cannot be before the request date.')
+  }
+  next()
+})
 
 const alertSchema = new mongoose.Schema({
   id: { type: String, required: true, trim: true, unique: true, maxlength: 40 },
@@ -40,6 +56,7 @@ const alertSchema = new mongoose.Schema({
 export const Shipment = mongoose.model('Shipment', shipmentSchema)
 export const InventoryItem = mongoose.model('InventoryItem', inventorySchema)
 export const Supplier = mongoose.model('Supplier', supplierSchema)
+export const ReturnRequest = mongoose.model('ReturnRequest', returnRequestSchema)
 export const Alert = mongoose.model('Alert', alertSchema)
 
 export function calculateInventoryCoverage(quantity, dailyDemand) {
@@ -49,4 +66,16 @@ export function calculateInventoryCoverage(quantity, dailyDemand) {
     cover,
     status: cover <= 7 ? 'Critical' : cover <= 14 ? 'Watch' : 'Healthy',
   }
+}
+
+function utcCalendarDay(date) {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+export function calculateReturnRating(requestedAt, completedAt, dayLimit) {
+  if (!completedAt) return 'Pending'
+  const elapsedDays = Math.round((utcCalendarDay(completedAt) - utcCalendarDay(requestedAt)) / 86_400_000)
+  if (elapsedDays < dayLimit) return 'Best'
+  if (elapsedDays === dayLimit) return 'Good'
+  return 'Poor'
 }

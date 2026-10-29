@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import mongoose from 'mongoose'
-import { Alert, InventoryItem, Shipment, Supplier, calculateInventoryCoverage } from '../src/models.js'
+import { Alert, InventoryItem, ReturnRequest, Shipment, Supplier, calculateInventoryCoverage, calculateReturnRating } from '../src/models.js'
 
 test('shipment schema accepts a complete record and rejects out-of-range risk', async () => {
   const shipment = new Shipment({
@@ -28,6 +28,7 @@ test('inventory schema requires non-negative quantities', async () => {
     quantity: 240,
     safetyStock: 80,
     dailyDemand: 20,
+    suppliers: ['Example Supplier'],
   })
 
   test('inventory coverage uses on-hand quantity and explicit demand thresholds', () => {
@@ -37,6 +38,17 @@ test('inventory schema requires non-negative quantities', async () => {
     assert.deepEqual(calculateInventoryCoverage(100, 0), { cover: null, status: 'Unknown' })
   })
   await item.validate()
+  assert.deepEqual(item.suppliers, ['Example Supplier'])
+
+  const legacyItem = new InventoryItem({
+    item: 'Legacy inventory item',
+    detail: 'Warehouse A',
+    quantity: 100,
+    safetyStock: 20,
+    dailyDemand: 10,
+  })
+  await legacyItem.validate()
+  assert.deepEqual(legacyItem.suppliers, [])
 
   const invalid = new InventoryItem({
     item: 'Invalid item',
@@ -64,6 +76,34 @@ test('supplier rates and reliability are bounded percentages', async () => {
     onTimeRate: 110,
     fulfillmentRate: 98,
     reliabilityScore: 90,
+  })
+  await assert.rejects(invalid.validate(), mongoose.Error.ValidationError)
+})
+
+test('return ratings distinguish early, deadline-day, late, and pending returns', () => {
+  const requestedAt = new Date('2026-10-01T00:00:00.000Z')
+  assert.equal(calculateReturnRating(requestedAt, null, 7), 'Pending')
+  assert.equal(calculateReturnRating(requestedAt, new Date('2026-10-07T00:00:00.000Z'), 7), 'Best')
+  assert.equal(calculateReturnRating(requestedAt, new Date('2026-10-08T00:00:00.000Z'), 7), 'Good')
+  assert.equal(calculateReturnRating(requestedAt, new Date('2026-10-09T00:00:00.000Z'), 7), 'Poor')
+})
+
+test('return request schema requires a valid day limit and ordered dates', async () => {
+  const request = new ReturnRequest({
+    product: 'Protective gloves',
+    supplier: 'Example Supplier',
+    requestedAt: '2026-10-01T00:00:00.000Z',
+    completedAt: '2026-10-08T00:00:00.000Z',
+    dayLimit: 7,
+  })
+  await request.validate()
+
+  const invalid = new ReturnRequest({
+    product: 'Protective gloves',
+    supplier: 'Example Supplier',
+    requestedAt: '2026-10-08T00:00:00.000Z',
+    completedAt: '2026-10-01T00:00:00.000Z',
+    dayLimit: 0,
   })
   await assert.rejects(invalid.validate(), mongoose.Error.ValidationError)
 })

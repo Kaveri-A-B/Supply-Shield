@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Box,
-  Check, ChevronDown, ChevronRight, CircleHelp, Clock3, Cloud,
-  Download, LayoutDashboard, LogOut, Menu,
+  Check, ChevronRight, CircleHelp, Clock3, Cloud, RotateCcw,
+  Download, LayoutDashboard, Menu,
   PackageCheck, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Truck, Users, X,
 } from 'lucide-react'
-import { type Alert, type InventoryItem, type Shipment, type Supplier } from './data'
+import { createDemoWorkspace, type Alert, type InventoryItem, type ReturnRequest, type Shipment, type Supplier } from './data'
 
-type Section = 'Overview' | 'Shipments' | 'Inventory' | 'Suppliers' | 'Alerts' | 'What-if' | 'Model & data' | 'Branding'
-type RecordKind = 'shipments' | 'inventory' | 'suppliers' | 'alerts'
+type Section = 'Overview' | 'Shipments' | 'Inventory' | 'Suppliers' | 'Returns' | 'Alerts' | 'What-if' | 'Model & data' | 'Branding'
+type RecordKind = 'shipments' | 'inventory' | 'suppliers' | 'returns' | 'alerts'
 type ManagedRecord = { id: string; [key: string]: unknown }
 
 type RecordField = {
   name: string
   label: string
-  type?: 'text' | 'number' | 'datetime-local' | 'select'
+  type?: 'text' | 'number' | 'datetime-local' | 'date' | 'select' | 'multiselect' | 'supplier' | 'inventory-item'
   options?: string[]
   min?: number
   max?: number
@@ -25,6 +25,7 @@ const recordLabels: Record<RecordKind, string> = {
   shipments: 'shipment',
   inventory: 'inventory item',
   suppliers: 'supplier',
+  returns: 'return record',
   alerts: 'alert',
 }
 
@@ -51,6 +52,7 @@ const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordFi
       { name: 'quantity', label: 'On hand', type: 'number', min: 0 },
       { name: 'safetyStock', label: 'Safety stock', type: 'number', min: 0 },
       { name: 'dailyDemand', label: 'Daily demand', type: 'number', min: 0 },
+      { name: 'suppliers', label: 'Assigned suppliers', type: 'multiselect' },
     ],
   },
   suppliers: {
@@ -61,6 +63,16 @@ const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordFi
       { name: 'onTimeRate', label: 'On-time rate (%)', type: 'number', min: 0, max: 100 },
       { name: 'fulfillmentRate', label: 'Fulfillment rate (%)', type: 'number', min: 0, max: 100 },
       { name: 'reliabilityScore', label: 'Reliability score (entered value)', type: 'number', min: 0, max: 100 },
+    ],
+  },
+  returns: {
+    endpoint: '/api/returns',
+    fields: [
+      { name: 'product', label: 'Product / inventory item', type: 'inventory-item' },
+      { name: 'supplier', label: 'Supplier', type: 'supplier' },
+      { name: 'requestedAt', label: 'Return requested on', type: 'date' },
+      { name: 'completedAt', label: 'Return completed on (leave blank while pending)', type: 'date' },
+      { name: 'dayLimit', label: 'Allowed return period (days)', type: 'number', min: 1, max: 365 },
     ],
   },
   alerts: {
@@ -80,14 +92,35 @@ const sections: { label: Section; icon: typeof LayoutDashboard; group: string }[
   { label: 'Shipments', icon: Truck, group: 'WORKSPACE' },
   { label: 'Inventory', icon: Box, group: 'WORKSPACE' },
   { label: 'Suppliers', icon: Users, group: 'WORKSPACE' },
+  { label: 'Returns', icon: RotateCcw, group: 'WORKSPACE' },
   { label: 'Alerts', icon: Bell, group: 'MONITOR' },
   { label: 'What-if', icon: Activity, group: 'MONITOR' },
   { label: 'Model & data', icon: SlidersHorizontal, group: 'MANAGE' },
   { label: 'Branding', icon: Sparkles, group: 'MANAGE' },
 ]
 
-function toManagedRecords(records: Array<Shipment | Alert | InventoryItem | Supplier>): ManagedRecord[] {
+function toManagedRecords(records: Array<Shipment | Alert | InventoryItem | Supplier | ReturnRequest>): ManagedRecord[] {
   return records.map(record => ({ ...record })) as ManagedRecord[]
+}
+
+function shipmentNeedsReview(shipment: Shipment) {
+  return shipment.status !== 'On track' || shipment.risk >= 70
+}
+
+function inventoryAtRiskSuppliers(item: InventoryItem, shipments: Shipment[]) {
+  const assigned = item.suppliers ?? []
+  return assigned.filter(name => shipments.some(shipment => shipment.supplier === name && shipmentNeedsReview(shipment)))
+}
+
+function selectedValues(value: string) {
+  const parsed: unknown = JSON.parse(value || '[]')
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+}
+
+function formatRecordDate(value: unknown) {
+  if (typeof value !== 'string' || !value) return '—'
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`)
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString()
 }
 
 async function apiRequest(path: string, init?: RequestInit) {
@@ -144,7 +177,7 @@ function makeDownload(name: string, blob: Blob) {
   link.href = url
   link.download = name
   link.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 function Logo({ small = false }: { small?: boolean }) {
@@ -187,56 +220,82 @@ function App() {
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [alertRecords, setAlertRecords] = useState<Alert[]>([])
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [authStatus, setAuthStatus] = useState<'loading' | 'signed-out' | 'signed-in'>('loading')
-  const [userEmail, setUserEmail] = useState('')
+  const [returnRequests, setReturnRequests] = useState<ReturnRequest[]>([])
+  const [demoMode, setDemoMode] = useState(true)
   const [apiError, setApiError] = useState('')
   const [toast, setToast] = useState('')
   const [logoColor, setLogoColor] = useState('#d9f36a')
   const [logoText, setLogoText] = useState('SupplyShield')
   const [logoStyle, setLogoStyle] = useState('Shield + route')
 
+  function exportReport() {
+    const report = {
+      generatedAt: new Date().toISOString(),
+      source: 'Current workspace records only; no external dataset used.',
+      shipments,
+      suppliers,
+      inventoryItems,
+      returns: returnRequests,
+      alerts: alertRecords,
+    }
+    makeDownload('supplyshield-report.json', new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }))
+    setToast('Workspace report downloaded.')
+  }
+
   async function loadWorkspace() {
-    const [shipmentData, inventoryData, supplierData, alertData] = await Promise.all([
-      apiJson<Shipment[]>('/api/shipments'),
-      apiJson<InventoryItem[]>('/api/inventory'),
-      apiJson<Supplier[]>('/api/suppliers'),
-      apiJson<Alert[]>('/api/alerts'),
-    ])
-    setShipments(shipmentData)
-    setAlerts(alertData.filter(alert => !alert.acknowledged))
-    setAlertRecords(alertData)
-    setInventoryItems(inventoryData)
-    setSuppliers(supplierData)
-    setApiError('')
+    try {
+      const [shipmentData, inventoryData, supplierData, returnData, alertData] = await Promise.all([
+        apiJson<Shipment[]>('/api/shipments'),
+        apiJson<InventoryItem[]>('/api/inventory'),
+        apiJson<Supplier[]>('/api/suppliers'),
+        apiJson<ReturnRequest[]>('/api/returns'),
+        apiJson<Alert[]>('/api/alerts'),
+      ])
+      if (![shipmentData, inventoryData, supplierData, returnData, alertData].some(records => records.length > 0)) {
+        const demo = createDemoWorkspace()
+        setShipments(demo.shipments)
+        setInventoryItems(demo.inventoryItems)
+        setSuppliers(demo.suppliers)
+        setReturnRequests(demo.returnRequests)
+        setAlertRecords(demo.alerts)
+        setAlerts(demo.alerts)
+        setDemoMode(true)
+      } else {
+        setShipments(shipmentData)
+        setAlerts(alertData.filter(alert => !alert.acknowledged))
+        setAlertRecords(alertData)
+        setInventoryItems(inventoryData)
+        setSuppliers(supplierData)
+        setReturnRequests(returnData)
+        setDemoMode(false)
+      }
+      setApiError('')
+    } catch (error) {
+      const demo = createDemoWorkspace()
+      setShipments(demo.shipments)
+      setInventoryItems(demo.inventoryItems)
+      setSuppliers(demo.suppliers)
+      setReturnRequests(demo.returnRequests)
+      setAlertRecords(demo.alerts)
+      setAlerts(demo.alerts)
+      setDemoMode(true)
+      throw error
+    }
   }
 
   useEffect(() => {
     let active = true
     async function initialize() {
       try {
-        const session = await apiJson<{ authenticated: boolean; email: string | null }>('/api/auth/session')
-        if (!active) return
-        if (!session.authenticated) {
-          setAuthStatus('signed-out')
-          return
-        }
-        setUserEmail(session.email || '')
-        setAuthStatus('signed-in')
-        try {
-          await loadWorkspace()
-        } catch (error) {
-          if (active) setApiError(error instanceof Error ? error.message : 'Could not load database records.')
-        }
+        await loadWorkspace()
       } catch (error) {
-        if (active) {
-          setApiError(error instanceof Error ? error.message : 'Could not connect to the server.')
-          setAuthStatus('signed-out')
-        }
+        if (active) setApiError(error instanceof Error ? error.message : 'Could not load workspace records.')
       }
     }
     void initialize()
@@ -249,39 +308,26 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
+  useEffect(() => {
+    function closeSearch(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setSearchOpen(false)
+        setQuery('')
+      }
+    }
+    window.addEventListener('keydown', closeSearch)
+    return () => window.removeEventListener('keydown', closeSearch)
+  }, [])
+
   const filteredShipments = useMemo(() => shipments.filter(item =>
     `${item.id} ${item.supplier} ${item.route} ${item.carrier}`.toLowerCase().includes(query.toLowerCase())), [shipments, query])
   const activeAlerts = alerts.length
-  const title = section === 'Overview' ? `Good morning, ${userEmail.split('@')[0] || 'there'}` : section
+  const title = section === 'Overview' ? 'Supply chain overview' : section
   const description = section === 'Overview'
     ? 'Here’s what’s happening across your supply chain today.'
     : section === 'Branding'
       ? 'Make the SupplyShield mark your own.'
       : `Monitor and manage your ${section.toLowerCase()} across the network.`
-
-  async function handleLogin(email: string, password: string) {
-    await apiJson('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    })
-    await loadWorkspace()
-    setUserEmail(email)
-    setAuthStatus('signed-in')
-  }
-
-  async function logout() {
-    try {
-      await apiRequest('/api/auth/logout', { method: 'POST' })
-      setAuthStatus('signed-out')
-      setShipments([])
-      setAlerts([])
-      setAlertRecords([])
-      setInventoryItems([])
-      setSuppliers([])
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : 'Sign out failed.')
-    }
-  }
 
   async function acknowledge(alertId: string) {
     try {
@@ -340,18 +386,11 @@ function App() {
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgForImage)}`
   }
 
-  if (authStatus === 'loading') {
-    return <main className="auth-page"><div className="auth-card"><Logo /><p>Checking secure sign-in…</p></div></main>
-  }
-  if (authStatus === 'signed-out') {
-    return <LoginScreen onLogin={handleLogin} initialError={apiError} />
-  }
-
   return <div className="app-shell">
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-top">
         <div className="brand-row"><Logo /><button className="icon-btn sidebar-close" aria-label="Close navigation" onClick={() => setSidebarOpen(false)}><X size={19} /></button></div>
-        <button className="workspace-switch"><span className="workspace-avatar">S</span><span className="workspace-meta"><strong>SupplyShield</strong><small>Administrator workspace</small></span><ChevronDown size={16} /></button>
+        <div className="workspace-switch"><span className="workspace-avatar">S</span><span className="workspace-meta"><strong>SupplyShield</strong><small>Operations workspace</small></span></div>
       </div>
       <nav className="nav-list" aria-label="Main navigation">
         {(['WORKSPACE', 'MONITOR', 'MANAGE'] as const).map(group => <div className="nav-group" key={group}>
@@ -373,8 +412,8 @@ function App() {
           <button onClick={() => setSection('Model & data')}>Explore data status <ArrowRight size={14} /></button>
           <div className="plan-orb orb-one" /><div className="plan-orb orb-two" />
         </div>
-        <button className="nav-item support-item" onClick={() => setToast('Help center is coming soon.')}><CircleHelp size={18} /><span>Help & support</span><span className="support-shortcut">?</span></button>
-        <div className="profile-row"><div className="profile-avatar">{userEmail.slice(0, 2).toUpperCase()}</div><div className="profile-meta"><strong>{userEmail}</strong><small>Administrator</small></div><button className="icon-btn signout-button" aria-label="Sign out" onClick={() => void logout()}><LogOut size={17} /></button></div>
+        <button className="nav-item support-item" onClick={() => setHelpOpen(true)}><CircleHelp size={18} /><span>Help & support</span><span className="support-shortcut">?</span></button>
+        <div className="profile-row"><div className="profile-avatar">S</div><div className="profile-meta"><strong>Open workspace</strong><small>No sign-in required</small></div></div>
       </div>
     </aside>
 
@@ -383,19 +422,20 @@ function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{section}</strong></div></div>
         <div className="topbar-actions">
-          <div className={`data-status ${apiError ? 'demo' : 'connected'}`}><span className="status-dot" />{apiError ? 'Database unavailable' : 'MongoDB connected'}<span className="status-divider">·</span><span>Protected workspace</span></div>
+          <div className={`data-status ${apiError ? 'demo' : 'connected'}`}><span className="status-dot" />{demoMode ? 'Demo data' : apiError ? 'Database unavailable' : 'MongoDB connected'}<span className="status-divider">·</span><span>Open workspace</span></div>
           <button className="topbar-icon" aria-label="Search" onClick={() => setSearchOpen(!searchOpen)}><Search size={19} /></button>
           <button className="topbar-icon notification-button" aria-label={`${activeAlerts} notifications`} onClick={() => setSection('Alerts')}><Bell size={19} />{activeAlerts > 0 && <span className="notification-dot" />}</button>
-          <div className="topbar-avatar">{userEmail.slice(0, 2).toUpperCase()}</div>
+          <div className="topbar-avatar">S</div>
         </div>
       </header>
       {searchOpen && <div className="global-search"><Search size={17} /><input autoFocus placeholder="Search shipments, suppliers, or items…" value={query} onChange={event => setQuery(event.target.value)} /><kbd>ESC</kbd><button className="icon-btn" onClick={() => { setSearchOpen(false); setQuery('') }} aria-label="Close search"><X size={16} /></button></div>}
 
       <div className="content">
+        {demoMode && <div className="demo-banner" role="status"><Sparkles size={16} /><span><strong>Demo workspace</strong> — five sample inventory items, suppliers, shipments, and returns are shown for preview. This generated data is not saved to MongoDB.</span></div>}
         {apiError && <div className="api-error" role="alert">{apiError} <button onClick={() => void loadWorkspace().catch(error => setApiError(error instanceof Error ? error.message : 'Could not load database records.'))}>Retry</button></div>}
         <div className="page-heading">
-          <div><div className="eyebrow"><span className="eyebrow-line" /> MONGODB · ADMIN WORKSPACE</div><h1>{title}<span className="wave">✳</span></h1><p>{description}</p></div>
-          <div className="heading-actions"><button className="button button-outline" onClick={() => setToast('Report export is not implemented yet.') }><Download size={16} /> Export report</button><button className="button button-dark" onClick={() => setSection('Shipments')}><Plus size={17} /> Manage shipments</button></div>
+          <div><div className="eyebrow"><span className="eyebrow-line" /> SUPPLY CHAIN · WORKSPACE</div><h1>{title}<span className="wave">✳</span></h1><p>{description}</p></div>
+          <div className="heading-actions"><button className="button button-outline" onClick={exportReport}><Download size={16} /> Export report</button><button className="button button-dark" onClick={() => setSection('Shipments')}><Plus size={17} /> Manage shipments</button></div>
         </div>
 
         {section === 'Branding' ? <section className="branding-layout">
@@ -412,36 +452,39 @@ function App() {
             <div className="preview-footer"><span><span className="preview-dot" /> {logoStyle}</span><span>360 × 96 px</span></div>
           </div>
         </section> : section !== 'Overview' ? <section className="panel module-panel">
-          <div className="panel-heading"><div><h2>{section} overview</h2><p>Records saved in MongoDB · changes require administrator sign-in</p></div></div>
-          {section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
-            section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} onChanged={loadWorkspace} /> :
-              section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} onChanged={loadWorkspace} /> :
-                section === 'Suppliers' ? <RecordManager kind="suppliers" records={suppliers} onChanged={loadWorkspace} /> :
-                  section === 'What-if' ? <WhatIfPanel items={inventoryItems} /> : <ModelDataPanel />}
+          <div className="panel-heading"><div><h2>{section} overview</h2><p>{section === 'Returns'
+            ? 'Track return request and completion dates. Best = before deadline · Good = deadline date · Poor = after deadline.'
+            : 'Records are saved in MongoDB.'}</p></div></div>
+          {section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} demoMode={demoMode} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
+            section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} demoMode={demoMode} suppliers={suppliers} searchQuery={query} onChanged={loadWorkspace} onDemoShipmentChange={shipment => setShipments(current => current.map(item => item.id === shipment.id ? shipment : item))} onNotify={setToast} /> :
+              section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} demoMode={demoMode} suppliers={suppliers} shipments={shipments} onChanged={loadWorkspace} onDemoInventoryChange={item => setInventoryItems(current => current.map(existing => existing.id === item.id ? item : existing))} onNotify={setToast} /> :
+                section === 'Suppliers' ? <RecordManager kind="suppliers" records={suppliers} demoMode={demoMode} returnRequests={returnRequests} onChanged={loadWorkspace} /> :
+                  section === 'Returns' ? <RecordManager kind="returns" records={returnRequests} demoMode={demoMode} suppliers={suppliers} inventoryItems={inventoryItems} onChanged={loadWorkspace} /> :
+                    section === 'What-if' ? <WhatIfPanel items={inventoryItems} /> : <ModelDataPanel />}
         </section> : <>
           <section className="metric-grid" aria-label="Supply chain metrics">
             <MetricCard title="On-time delivery" value={suppliers.length ? `${(suppliers.reduce((sum, item) => sum + Number.parseFloat(item.onTime), 0) / suppliers.length).toFixed(1)}%` : '—'} change={`${suppliers.length} suppliers`} positive caption="database records" icon={<PackageCheck size={18} />} />
-            <MetricCard title="Shipments at risk" value={String(shipments.filter(item => item.risk >= 70).length)} change={`${shipments.length} total`} positive={false} caption="current records" icon={<Truck size={18} />} />
+            <MetricCard title="Shipments at risk" value={String(shipments.filter(shipmentNeedsReview).length)} change={`${shipments.length} total`} positive={false} caption="current records" icon={<Truck size={18} />} />
             <MetricCard title="Inventory coverage" value={inventoryItems.some(item => item.cover !== null) ? (inventoryItems.reduce((sum, item) => sum + (item.cover ?? 0), 0) / inventoryItems.filter(item => item.cover !== null).length).toFixed(1) : '—'} suffix=" days" change={`${inventoryItems.length} items`} positive={false} caption="database records" icon={<Box size={18} />} />
             <MetricCard title="Supplier health" value={suppliers.length ? (suppliers.reduce((sum, item) => sum + item.score, 0) / suppliers.length).toFixed(0) : '—'} suffix="/100" change={`${suppliers.length} suppliers`} positive caption="database records" icon={<Users size={18} />} />
           </section>
           <section className="dashboard-grid">
             <div className="panel risk-panel">
-              <div className="panel-heading chart-heading"><div><div className="title-with-info"><h2>Current shipment risk</h2><button className="info-button" aria-label="Risk score information"><CircleHelp size={15} /></button></div><p>Scores entered on current shipment records</p></div><span className="tool-pill">{shipments.length} records</span></div>
-              <div className="risk-summary"><div><span className="summary-number">{shipments.filter(item => item.risk >= 70).length}</span><span className="summary-label">high-risk shipments (70+)</span></div></div>
+              <div className="panel-heading chart-heading"><div><div className="title-with-info"><h2>Current shipment risk</h2><button className="info-button" aria-label="Risk score information" title="Risk scores are manually entered, not generated predictions. At-risk and delayed shipments, or scores of 70+, can be reviewed for supplier alternatives." onClick={() => setToast('Risk values are manually entered, not predictions. At-risk, delayed, and 70+ risk shipments can be reviewed for supplier alternatives.')}><CircleHelp size={15} /></button></div><p>Scores entered on current shipment records</p></div><span className="tool-pill">{shipments.length} records</span></div>
+              <div className="risk-summary"><div><span className="summary-number">{shipments.filter(shipmentNeedsReview).length}</span><span className="summary-label">shipments needing review</span></div></div>
               <TrendChart values={shipments.slice(0, 24).map(item => item.risk)} />
               <div className="chart-legend"><span><i className="legend-line" /> Risk score</span><span className="chart-note">Entered record values · Not a model prediction</span></div>
             </div>
             <div className="panel alerts-panel">
               <div className="panel-heading"><div><h2>Needs attention <span className="heading-count">{activeAlerts}</span></h2><p>Priority items to review</p></div><button className="text-link" onClick={() => setSection('Alerts')}>View all <ArrowRight size={14} /></button></div>
-              <AlertList alerts={alerts.slice(0, 3)} onAcknowledge={acknowledge} compact />
+              <AlertList alerts={alerts.slice(0, 3)} onAcknowledge={acknowledge} compact disabled={demoMode} />
               <button className="all-alerts-button" onClick={() => setSection('Alerts')}>Go to alert center <ArrowRight size={15} /></button>
             </div>
           </section>
           <section className="bottom-grid">
             <div className="panel shipments-panel">
               <div className="panel-heading"><div><div className="title-with-info"><h2>Shipment activity</h2><span className="table-count">{shipments.length} records</span></div><p>Your most recent shipments across all routes</p></div><button className="text-link" onClick={() => setSection('Shipments')}>All shipments <ArrowRight size={14} /></button></div>
-              <ShipmentTable shipments={filteredShipments.slice(0, 4)} onView={id => setToast(`Opening details for ${id}`)} />
+              <ShipmentTable shipments={filteredShipments.slice(0, 4)} onView={id => { setSection('Shipments'); setQuery(id) }} />
             </div>
             <div className="panel inventory-panel">
               <div className="panel-heading"><div><h2>Inventory watchlist</h2><p>Items nearing safety stock</p></div><button className="text-link" onClick={() => setSection('Inventory')}>View all <ArrowRight size={14} /></button></div>
@@ -453,10 +496,22 @@ function App() {
               <div className="inventory-foot"><span>{inventoryItems.length} inventory records</span><button onClick={() => setSection('Inventory')}>Review inventory <ArrowRight size={14} /></button></div>
             </div>
           </section>
-          <div className="footer-note"><ShieldCheck size={15} /><span>Decision support, not automated action.</span><span className="footer-divider">·</span><span>Risk values are manually entered; no prediction model is connected.</span><button onClick={() => setToast('MongoDB stores the records entered by an authenticated administrator.')}>About this workspace</button></div>
+          <div className="footer-note"><ShieldCheck size={15} /><span>Decision support, not automated action.</span><span className="footer-divider">·</span><span>Risk values are manually entered; no prediction model is connected.</span><button onClick={() => setToast('MongoDB stores records entered in this open workspace.')}>About this workspace</button></div>
         </>}
       </div>
     </main>
+    {helpOpen && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setHelpOpen(false) }}>
+      <section className="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div className="panel-heading"><div><h2 id="help-title">SupplyShield help</h2><p>Using this workspace</p></div><button className="icon-btn" type="button" aria-label="Close help" onClick={() => setHelpOpen(false)}><X size={17} /></button></div>
+        <ul>
+          <li>Use the sidebar to review shipments, inventory, suppliers, alerts, and scenario tools.</li>
+          <li>On the Shipments page, use <strong>Find alternative</strong> on at-risk or delayed shipments to compare suppliers already entered in this workspace.</li>
+          <li>Switching suppliers updates the shipment record. Verify availability and delivery capability directly with the supplier; ETA and risk values are not automatically recalculated.</li>
+          <li>Sample records are synthetic previews only. Live records are stored in MongoDB; no external dataset is loaded.</li>
+        </ul>
+        <button className="button button-dark" type="button" onClick={() => { setHelpOpen(false); setSection('Shipments') }}>Open shipments <ArrowRight size={14} /></button>
+      </section>
+    </div>}
     {toast && <div className="toast" role="status"><span className="toast-check"><Check size={15} /></span>{toast}<button aria-label="Dismiss notification" onClick={() => setToast('')}><X size={15} /></button></div>}
   </div>
 }
@@ -471,12 +526,12 @@ function MetricCard({ title, value, suffix, change, positive, caption, icon }: {
   </article>
 }
 
-function AlertList({ alerts, onAcknowledge, compact = false }: { alerts: Alert[]; onAcknowledge: (id: string) => void; compact?: boolean }) {
+function AlertList({ alerts, onAcknowledge, compact = false, disabled = false }: { alerts: Alert[]; onAcknowledge: (id: string) => void; compact?: boolean; disabled?: boolean }) {
   if (!alerts.length) return <div className="empty-alerts"><ShieldCheck size={20} /><strong>All caught up</strong><span>No active alerts need attention.</span></div>
   return <div className={`alert-list ${compact ? 'alert-list-compact' : ''}`}>{alerts.map(alert => <article className="alert-item" key={alert.id}>
     <div className={`alert-icon alert-${alert.severity.toLowerCase()}`}><SeverityIcon kind={alert.icon} /></div>
     <div className="alert-copy"><div className="alert-title-row"><strong>{alert.title}</strong><span className={`severity-pill severity-${alert.severity.toLowerCase()}`}>{alert.severity}</span></div><p>{alert.description}</p><span className="alert-time"><Clock3 size={12} />{alert.time}</span></div>
-    <button className="alert-ack" onClick={() => onAcknowledge(alert.id)} aria-label={`Acknowledge ${alert.title}`} title="Acknowledge alert"><Check size={15} /></button>
+    <button className="alert-ack" disabled={disabled} onClick={() => onAcknowledge(alert.id)} aria-label={`Acknowledge ${alert.title}`} title={disabled ? 'Demo records cannot be changed.' : 'Acknowledge alert'}><Check size={15} /></button>
   </article>)}</div>
 }
 
@@ -494,65 +549,116 @@ function ShipmentTable({ shipments, onView }: { shipments: Shipment[]; onView: (
   </tbody></table></div>
 }
 
-function LoginScreen({ onLogin, initialError }: {
-  onLogin: (email: string, password: string) => Promise<void>
-  initialError: string
-}) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState(initialError)
-  const [busy, setBusy] = useState(false)
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      await onLogin(email, password)
-    } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Sign-in failed.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return <main className="auth-page">
-    <form className="auth-card" onSubmit={event => void submit(event)}>
-      <Logo />
-      <h1>Administrator sign in</h1>
-      <p>Sign in to access the protected SupplyShield workspace.</p>
-      <label className="field-label" htmlFor="admin-email">Email</label>
-      <input id="admin-email" className="text-field" type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} />
-      <label className="field-label" htmlFor="admin-password">Password</label>
-      <input id="admin-password" className="text-field" type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} />
-      {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="button button-dark auth-submit" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      <p className="privacy-note"><ShieldCheck size={15} /> Credentials are verified by the server and never stored in the browser.</p>
-    </form>
-  </main>
-}
-
-function RecordManager({ kind, records, onChanged, onAcknowledge }: {
+function RecordManager({ kind, records, demoMode = false, suppliers = [], shipments = [], inventoryItems = [], returnRequests = [], searchQuery = '', onChanged, onDemoShipmentChange, onDemoInventoryChange, onAcknowledge, onNotify }: {
   kind: RecordKind
-  records: Array<Shipment | Alert | InventoryItem | Supplier>
+  records: Array<Shipment | Alert | InventoryItem | Supplier | ReturnRequest>
+  demoMode?: boolean
+  suppliers?: Supplier[]
+  shipments?: Shipment[]
+  inventoryItems?: InventoryItem[]
+  returnRequests?: ReturnRequest[]
+  searchQuery?: string
   onChanged: () => Promise<void>
+  onDemoShipmentChange?: (shipment: Shipment) => void
+  onDemoInventoryChange?: (item: InventoryItem) => void
   onAcknowledge?: (id: string) => Promise<void>
+  onNotify?: (message: string) => void
 }) {
   const definition = recordDefinitions[kind]
   const managedRecords = toManagedRecords(records)
+  const shipmentRecords = kind === 'shipments'
+    ? records.filter((record): record is Shipment => 'supplier' in record && 'risk' in record)
+    : []
+  const linkedShipments = shipments
+  const displayedRecords = managedRecords.filter(record =>
+    !searchQuery || kind !== 'shipments' || Object.values(record).some(value => String(value ?? '').toLowerCase().includes(searchQuery.toLowerCase())))
   const [editing, setEditing] = useState<ManagedRecord | null | undefined>(undefined)
+  const [alternativeFor, setAlternativeFor] = useState<Shipment | null>(null)
+  const [inventoryAlternativeFor, setInventoryAlternativeFor] = useState<InventoryItem | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [switchBusy, setSwitchBusy] = useState(false)
+  const [switchError, setSwitchError] = useState('')
+  const alternatives = suppliers
+    .filter(supplier => supplier.name !== alternativeFor?.supplier)
+    .sort((first, second) => second.score - first.score || Number.parseFloat(second.onTime) - Number.parseFloat(first.onTime))
+  const inventoryAlternatives = suppliers
+    .filter(supplier => !inventoryAlternativeFor?.suppliers.includes(supplier.name))
+    .sort((first, second) => second.score - first.score || Number.parseFloat(second.onTime) - Number.parseFloat(first.onTime))
+
+  async function switchSupplier(supplier: Supplier) {
+    if (!alternativeFor) return
+    setSwitchBusy(true)
+    setSwitchError('')
+    try {
+      if (demoMode) {
+        onDemoShipmentChange?.({
+          ...alternativeFor,
+          supplier: supplier.name,
+          initials: supplier.initials,
+          tone: supplier.tone,
+        })
+      } else {
+        await apiRequest(`${definition.endpoint}/${encodeURIComponent(alternativeFor.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ supplier: supplier.name, initials: supplier.initials, tone: supplier.tone }),
+        })
+        await onChanged()
+      }
+      setAlternativeFor(null)
+      onNotify?.(demoMode
+        ? `Demo preview: supplier for ${alternativeFor.id} changed to ${supplier.name}. This was not saved.`
+        : `Supplier for ${alternativeFor.id} changed to ${supplier.name}.`)
+    } catch (switchError) {
+      setSwitchError(switchError instanceof Error ? switchError.message : 'Could not change the shipment supplier.')
+    } finally {
+      setSwitchBusy(false)
+    }
+  }
+
+  async function switchInventorySupplier(supplier: Supplier) {
+    if (!inventoryAlternativeFor) return
+    setSwitchBusy(true)
+    setSwitchError('')
+    const atRiskNames = inventoryAtRiskSuppliers(inventoryAlternativeFor, shipments)
+    const updatedItem: InventoryItem = {
+      ...inventoryAlternativeFor,
+      suppliers: [...inventoryAlternativeFor.suppliers.filter(name => !atRiskNames.includes(name)), supplier.name],
+    }
+    try {
+      if (demoMode) {
+        onDemoInventoryChange?.(updatedItem)
+      } else {
+        await apiRequest(`${definition.endpoint}/${encodeURIComponent(inventoryAlternativeFor.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ suppliers: updatedItem.suppliers }),
+        })
+        await onChanged()
+      }
+      setInventoryAlternativeFor(null)
+      onNotify?.(demoMode
+        ? `Demo preview: alternative supplier added for ${inventoryAlternativeFor.item}. This was not saved.`
+        : `Alternative supplier saved for ${inventoryAlternativeFor.item}.`)
+    } catch (switchError) {
+      setSwitchError(switchError instanceof Error ? switchError.message : 'Could not update the inventory suppliers.')
+    } finally {
+      setSwitchBusy(false)
+    }
+  }
 
   function openForm(record?: ManagedRecord) {
     const formValues: Record<string, string> = {}
     for (const field of definition.fields) {
       const current = record?.[field.name]
       const value = current === undefined || current === null ? '' : String(current)
-      formValues[field.name] = field.type === 'datetime-local' && value
-        ? new Date(value).toISOString().slice(0, 16)
-        : value
+      formValues[field.name] = field.type === 'date'
+        ? value ? new Date(value).toISOString().slice(0, 10) : ''
+        : field.type === 'multiselect'
+        ? JSON.stringify(Array.isArray(current) ? current.filter((item): item is string => typeof item === 'string') : [])
+        : field.type === 'datetime-local' && value
+          ? new Date(value).toISOString().slice(0, 16)
+          : value
     }
     setValues(formValues)
     setEditing(record ?? null)
@@ -568,7 +674,9 @@ function RecordManager({ kind, records, onChanged, onAcknowledge }: {
       .map(field => {
         const value = values[field.name] ?? ''
         if (field.type === 'number') return [field.name, Number(value)]
+        if (field.type === 'date') return [field.name, value ? `${value}T00:00:00.000Z` : null]
         if (field.type === 'datetime-local') return [field.name, new Date(value).toISOString()]
+        if (field.type === 'multiselect') return [field.name, selectedValues(value)]
         return [field.name, value]
       }))
     try {
@@ -597,19 +705,64 @@ function RecordManager({ kind, records, onChanged, onAcknowledge }: {
 
   return <div className="record-manager">
     <div className="record-toolbar">
-      <span>{records.length} saved record{records.length === 1 ? '' : 's'}</span>
-      <button className="button button-dark button-small" onClick={() => openForm()}><Plus size={15} /> Add {recordLabels[kind]}</button>
+      <span>{demoMode ? `${displayedRecords.length} sample ${recordLabels[kind]}${records.length === 1 ? '' : 's'}` : `${displayedRecords.length} of ${records.length} saved record${records.length === 1 ? '' : 's'}`}</span>
+      <button className="button button-dark button-small" disabled={demoMode} title={demoMode ? 'Connect MongoDB to add saved records.' : undefined} onClick={() => openForm()}><Plus size={15} /> Add {recordLabels[kind]}</button>
     </div>
+    {kind === 'returns' && (!suppliers.length || !inventoryItems.length) && <p className="record-prerequisite-note">Add at least one supplier and one inventory item before recording returns.</p>}
     {error && !editing && <p className="form-error" role="alert">{error}</p>}
-    {records.length === 0 ? <div className="empty-state"><Search size={21} /><strong>No {recordLabels[kind]} records yet</strong><span>Add a record or load a verified dataset to get started.</span></div> :
+    {displayedRecords.length === 0 ? <div className="empty-state"><Search size={21} /><strong>{records.length === 0 ? `No ${recordLabels[kind]} records yet` : 'No matching shipments'}</strong><span>{records.length === 0 ? 'Add a record to get started.' : 'Clear the search field to see all shipments.'}</span></div> :
       <div className="table-scroll"><table className="shipment-table module-table">
-        <thead><tr>{definition.fields.map(field => <th key={field.name}>{field.label.toUpperCase()}</th>)}<th>ACTIONS</th></tr></thead>
-        <tbody>{managedRecords.map(record => <tr key={record.id}>
-          {definition.fields.map(field => <td key={field.name}>{String(record[field.name] ?? '—')}</td>)}
+        <thead><tr>{definition.fields.map(field => <th key={field.name}>{field.name === 'suppliers' && kind === 'inventory' ? 'ASSIGNED SUPPLIERS' : field.label.toUpperCase()}</th>)}{kind === 'inventory' && <th>SUPPLIERS AT RISK</th>}{kind === 'returns' && <th>RATING</th>}{kind === 'suppliers' && <th>RETURN PERFORMANCE</th>}<th>ACTIONS</th></tr></thead>
+        <tbody>{displayedRecords.map(record => <tr key={record.id}>
+          {definition.fields.map(field => <td key={field.name}>{field.name === 'suppliers' && kind === 'inventory'
+            ? (Array.isArray(record.suppliers) && record.suppliers.length ? record.suppliers.join(', ') : '—')
+            : field.type === 'date'
+              ? kind === 'returns' && field.name === 'completedAt' && !record[field.name] ? 'Pending' : formatRecordDate(record[field.name])
+              : String(record[field.name] ?? (kind === 'returns' && field.name === 'completedAt' ? 'Pending' : '—'))}</td>)}
+          {kind === 'inventory' && <td className="inventory-risk-suppliers">
+            {(() => {
+              const assigned = Array.isArray(record.suppliers)
+                ? record.suppliers.filter((name): name is string => typeof name === 'string')
+                : []
+              const inventoryItem = records.find((item): item is InventoryItem => 'quantity' in item && item.id === record.id)
+              const atRisk = inventoryItem ? inventoryAtRiskSuppliers(inventoryItem, linkedShipments) : []
+              return <>{atRisk.length
+                ? atRisk.map(name => {
+                  const shipment = linkedShipments.find(item => item.supplier === name && shipmentNeedsReview(item))
+                  return <span className="inventory-supplier-risk" key={name} title={shipment ? `${shipment.status} · ${shipment.risk}% risk` : undefined}><i />{name}<small>At risk</small></span>
+                })
+                : <span className="inventory-supplier-clear">{assigned.length ? 'None reported' : 'No suppliers assigned'}</span>}
+                {kind === 'inventory' && atRisk.length > 0 && inventoryItem && <button className="button button-outline button-small inventory-alternative-button" type="button" onClick={() => {
+                  setInventoryAlternativeFor(inventoryItem)
+                  setSwitchError('')
+                }}>Alternative supplier</button>}
+              </>
+            })()}
+          </td>}
+          {kind === 'returns' && <td><span className={`return-rating return-rating-${String(record.rating).toLowerCase()}`}>{String(record.rating || 'Pending')}</span></td>}
+          {kind === 'suppliers' && <td className="return-performance-cell">
+            {(() => {
+              const supplierReturns = returnRequests.filter(item => item.supplier === record.name && item.rating !== 'Pending')
+              const onTime = supplierReturns.filter(item => item.rating === 'Best' || item.rating === 'Good').length
+              const best = supplierReturns.filter(item => item.rating === 'Best').length
+              const good = supplierReturns.filter(item => item.rating === 'Good').length
+              const poor = supplierReturns.filter(item => item.rating === 'Poor').length
+              return supplierReturns.length
+                ? <><strong>{Math.round(onTime / supplierReturns.length * 100)}% on time</strong><small>{best} Best · {good} Good · {poor} Poor</small></>
+                : <span className="inventory-supplier-clear">No return history</span>
+            })()}
+          </td>}
           <td className="record-actions">
-            {kind === 'alerts' && record.acknowledged !== true && onAcknowledge && <button className="button button-outline button-small" onClick={() => void onAcknowledge(record.id)}>Acknowledge</button>}
-            <button className="button button-outline button-small" onClick={() => openForm(record)}>Edit</button>
-            <button className="button button-outline button-small" onClick={() => void remove(record)}>Delete</button>
+            {kind === 'shipments' && shipmentRecords.some(shipment => shipment.id === record.id && shipmentNeedsReview(shipment)) && <button className="button button-outline button-small" type="button" onClick={() => {
+              const shipment = shipmentRecords.find(item => item.id === record.id)
+              if (shipment) {
+                setAlternativeFor(shipment)
+                setSwitchError('')
+              }
+            }}>Find alternative</button>}
+            {kind === 'alerts' && record.acknowledged !== true && onAcknowledge && <button className="button button-outline button-small" disabled={demoMode} onClick={() => void onAcknowledge(record.id)}>Acknowledge</button>}
+            <button className="button button-outline button-small" disabled={demoMode} onClick={() => openForm(record)}>Edit</button>
+            <button className="button button-outline button-small" disabled={demoMode} onClick={() => void remove(record)}>Delete</button>
           </td>
         </tr>)}</tbody>
       </table></div>}
@@ -617,15 +770,66 @@ function RecordManager({ kind, records, onChanged, onAcknowledge }: {
       <form className="record-form" onSubmit={event => void save(event)}>
         <div className="panel-heading"><div><h2>{editing ? 'Edit' : 'Add'} {recordLabels[kind]}</h2><p>Saved securely to the connected database.</p></div><button className="icon-btn" type="button" aria-label="Close form" onClick={() => setEditing(undefined)}><X size={17} /></button></div>
         {definition.fields.map(field => <label className="record-field" key={field.name}>{field.label}
-          {field.type === 'select'
+          {field.type === 'multiselect'
+            ? <select className="text-field multi-select-field" multiple value={selectedValues(values[field.name] ?? '')} disabled={!suppliers.length} onChange={event => {
+              const selected = Array.from(event.currentTarget.selectedOptions, option => option.value)
+              setValues(current => ({ ...current, [field.name]: JSON.stringify(selected) }))
+            }}>
+              {suppliers.map(supplier => <option key={supplier.id} value={supplier.name}>{supplier.name}</option>)}
+            </select>
+            : field.type === 'supplier' || field.type === 'inventory-item'
+              ? <select className="text-field" required value={values[field.name] ?? ''} disabled={field.type === 'supplier' ? !suppliers.length : !inventoryItems.length} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))}>
+                <option value="" disabled>Select…</option>
+                {field.type === 'supplier'
+                  ? suppliers.map(supplier => <option key={supplier.id} value={supplier.name}>{supplier.name}</option>)
+                  : inventoryItems.map(item => <option key={item.id} value={item.item}>{item.item}</option>)}
+              </select>
+            : field.type === 'select'
             ? <select className="text-field" required value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))}>
               <option value="" disabled>Select…</option>{field.options?.map(option => <option key={option}>{option}</option>)}
             </select>
-            : <input className="text-field" type={field.type || 'text'} required min={field.min} max={field.max} step={field.type === 'number' ? 'any' : undefined} disabled={Boolean(editing) && field.name === 'id'} value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))} />}
+            : <input className="text-field" type={field.type || 'text'} required={field.type !== 'date' || field.name !== 'completedAt'} min={field.min} max={field.max} step={field.type === 'number' ? '1' : undefined} disabled={Boolean(editing) && field.name === 'id'} value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))} />}
+          {field.type === 'multiselect' && <small className="record-field-help">{suppliers.length ? 'Hold Ctrl (Windows) or Command (Mac) to select multiple suppliers.' : 'Add supplier records before assigning suppliers to inventory.'}</small>}
         </label>)}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="record-form-actions"><button className="button button-outline" type="button" onClick={() => setEditing(undefined)}>Cancel</button><button className="button button-dark" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save record'}</button></div>
       </form>
+    </div>}
+    {alternativeFor && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !switchBusy) setAlternativeFor(null) }}>
+      <section className="supplier-switch-dialog" role="dialog" aria-modal="true" aria-labelledby="supplier-switch-title">
+        <div className="panel-heading">
+          <div><h2 id="supplier-switch-title">Emergency alternatives for {alternativeFor.id}</h2><p>{alternativeFor.supplier} · {alternativeFor.route} · {alternativeFor.status}</p></div>
+          <button className="icon-btn" type="button" aria-label="Close alternatives" disabled={switchBusy} onClick={() => setAlternativeFor(null)}><X size={17} /></button>
+        </div>
+        <p className="supplier-switch-note">{demoMode
+          ? 'Preview only: these synthetic supplier records are for demonstration. A switch updates this page temporarily and is not saved.'
+          : 'Options use only supplier records already entered in this workspace. Confirm capacity and emergency delivery with the supplier before switching.'}</p>
+        {switchError && <p className="form-error" role="alert">{switchError}</p>}
+        {alternatives.length ? <div className="alternative-list">{alternatives.map(supplier => <article className="alternative-card" key={supplier.id}>
+          <div className={`supplier-avatar avatar-${supplier.tone}`}>{supplier.initials}</div>
+          <div className="alternative-details"><strong>{supplier.name}</strong><span>Reliability {supplier.score}/100 · On time {supplier.onTime} · Fulfillment {supplier.fulfillment}</span><small>{supplier.orders} completed orders recorded</small></div>
+          <button className="button button-dark button-small" type="button" disabled={switchBusy} onClick={() => void switchSupplier(supplier)}>{switchBusy ? 'Updating…' : 'Switch supplier'}</button>
+        </article>)}</div> : <div className="empty-state"><Users size={21} /><strong>No alternative suppliers available</strong><span>Add another supplier in the Suppliers section to compare workspace records.</span></div>}
+        <p className="supplier-switch-footnote">Switching updates the supplier name and display initials/avatar only. The ETA and risk score are unchanged.</p>
+      </section>
+    </div>}
+    {inventoryAlternativeFor && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !switchBusy) setInventoryAlternativeFor(null) }}>
+      <section className="supplier-switch-dialog" role="dialog" aria-modal="true" aria-labelledby="inventory-supplier-switch-title">
+        <div className="panel-heading">
+          <div><h2 id="inventory-supplier-switch-title">Alternative suppliers for {inventoryAlternativeFor.item}</h2><p>{inventoryAtRiskSuppliers(inventoryAlternativeFor, shipments).join(', ')} · supplier at risk</p></div>
+          <button className="icon-btn" type="button" aria-label="Close alternatives" disabled={switchBusy} onClick={() => setInventoryAlternativeFor(null)}><X size={17} /></button>
+        </div>
+        <p className="supplier-switch-note">{demoMode
+          ? 'Preview only: selecting a supplier updates this inventory item temporarily and is not saved.'
+          : 'Select an existing supplier to replace the at-risk supplier assignment. Verify product availability and delivery capability directly with the supplier.'}</p>
+        {switchError && <p className="form-error" role="alert">{switchError}</p>}
+        {inventoryAlternatives.length ? <div className="alternative-list">{inventoryAlternatives.map(supplier => <article className="alternative-card" key={supplier.id}>
+          <div className={`supplier-avatar avatar-${supplier.tone}`}>{supplier.initials}</div>
+          <div className="alternative-details"><strong>{supplier.name}</strong><span>Reliability {supplier.score}/100 · On time {supplier.onTime} · Fulfillment {supplier.fulfillment}</span><small>{supplier.orders} completed orders recorded</small></div>
+          <button className="button button-dark button-small" type="button" disabled={switchBusy} onClick={() => void switchInventorySupplier(supplier)}>{switchBusy ? 'Updating…' : 'Use supplier'}</button>
+        </article>)}</div> : <div className="empty-state"><Users size={21} /><strong>No alternatives available</strong><span>Add another supplier in the Suppliers section to replace this at-risk assignment.</span></div>}
+        <p className="supplier-switch-footnote">The selected supplier replaces at-risk assignments. Other assigned suppliers are kept; shipment ETA and risk values are unchanged.</p>
+      </section>
     </div>}
   </div>
 }
