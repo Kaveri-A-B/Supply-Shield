@@ -558,7 +558,7 @@ function App() {
               <div className="inventory-foot"><span>{inventoryItems.length} inventory records</span><button onClick={() => setSection('Inventory')}>Review inventory <ArrowRight size={14} /></button></div>
             </div>
           </section>
-          <div className="footer-note"><ShieldCheck size={15} /><span>Decision support, not automated action.</span><span className="footer-divider">·</span><span>Risk values are manually entered; no prediction model is connected.</span><button onClick={() => setToast('MongoDB stores records entered in this open workspace.')}>About this workspace</button></div>
+          <div className="footer-note"><button onClick={() => setToast('MongoDB stores records entered in this open workspace.')}>About this workspace</button></div>
         </>}
       </div>
     </main>
