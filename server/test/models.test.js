@@ -14,14 +14,29 @@ test('shipment schema accepts a complete record and rejects out-of-range risk', 
     risk: 35,
     initials: 'ES',
     tone: 'blue',
+    buyerRefunds: [{
+      amount: 1250.5,
+      currency: 'INR',
+      fromSupplier: 'Previous Supplier',
+      toSupplier: 'Example Supplier',
+    }],
   })
   await shipment.validate()
+  assert.equal(shipment.buyerRefunds[0].status, 'Recorded - not processed')
+  assert.ok(shipment.buyerRefunds[0].recordedAt instanceof Date)
 
   const invalid = new Shipment({ ...shipment.toObject(), id: 'SHP-1002', risk: 101 })
   await assert.rejects(invalid.validate(), mongoose.Error.ValidationError)
+
+  const invalidRefund = new Shipment({
+    ...shipment.toObject(),
+    id: 'SHP-1003',
+    buyerRefunds: [{ amount: 0, currency: 'INR', fromSupplier: 'Old', toSupplier: 'New' }],
+  })
+  await assert.rejects(invalidRefund.validate(), mongoose.Error.ValidationError)
 })
 
-test('inventory schema requires non-negative quantities', async () => {
+test('inventory schema requires on-hand quantity to exceed safety stock', async () => {
   const item = new InventoryItem({
     item: 'Protective gloves',
     detail: 'Warehouse A',
@@ -53,11 +68,29 @@ test('inventory schema requires non-negative quantities', async () => {
   const invalid = new InventoryItem({
     item: 'Invalid item',
     detail: 'Warehouse A',
-    quantity: -1,
+    quantity: 80,
     safetyStock: 80,
     dailyDemand: 20,
   })
   await assert.rejects(invalid.validate(), mongoose.Error.ValidationError)
+
+  const belowSafetyStock = new InventoryItem({
+    item: 'Below safety stock',
+    detail: 'Warehouse A',
+    quantity: 79,
+    safetyStock: 80,
+    dailyDemand: 20,
+  })
+  await assert.rejects(belowSafetyStock.validate(), mongoose.Error.ValidationError)
+
+  const negativeQuantity = new InventoryItem({
+    item: 'Negative quantity',
+    detail: 'Warehouse A',
+    quantity: -1,
+    safetyStock: 0,
+    dailyDemand: 20,
+  })
+  await assert.rejects(negativeQuantity.validate(), mongoose.Error.ValidationError)
 })
 
 test('supplier rates and reliability are bounded percentages', async () => {

@@ -3,11 +3,21 @@ export type Shipment = {
   supplier: string
   route: string
   carrier: string
-  eta: string
-  status: 'On track' | 'At risk' | 'Delayed'
-  risk: number
+  eta: string | null
+  status: 'On track' | 'At risk' | 'Delayed' | null
+  risk: number | null
   initials: string
   tone: string
+  buyerRefunds?: BuyerRefund[]
+}
+
+export type BuyerRefund = {
+  amount: number
+  currency: 'INR'
+  fromSupplier: string
+  toSupplier: string
+  recordedAt: string
+  status: 'Recorded - not processed'
 }
 
 export type Alert = {
@@ -78,7 +88,7 @@ export function createDemoWorkspace() {
 
   const inventoryItems: InventoryItem[] = [
     { id: 'sample-inventory-1', item: 'Industrial ball bearings', detail: 'North warehouse', quantity: 240, safetyStock: 80, dailyDemand: 20, suppliers: [suppliers[0].name], cover: 12, status: 'Watch' },
-    { id: 'sample-inventory-2', item: 'Protective work gloves', detail: 'Coast warehouse', quantity: 45, safetyStock: 60, dailyDemand: 15, suppliers: [suppliers[1].name], cover: 3, status: 'Critical' },
+    { id: 'sample-inventory-2', item: 'Protective work gloves', detail: 'Coast warehouse', quantity: 120, safetyStock: 60, dailyDemand: 15, suppliers: [suppliers[1].name], cover: 8, status: 'Watch' },
     { id: 'sample-inventory-3', item: 'Hydraulic pump seals', detail: 'Central warehouse', quantity: 180, safetyStock: 50, dailyDemand: 12, suppliers: [suppliers[2].name], cover: 15, status: 'Healthy' },
     { id: 'sample-inventory-4', item: 'Stainless steel fasteners', detail: 'West warehouse', quantity: 96, safetyStock: 40, dailyDemand: 16, suppliers: [suppliers[3].name], cover: 6, status: 'Critical' },
     { id: 'sample-inventory-5', item: 'Packaging cartons', detail: 'South warehouse', quantity: 320, safetyStock: 70, dailyDemand: 16, suppliers: [suppliers[4].name], cover: 20, status: 'Healthy' },

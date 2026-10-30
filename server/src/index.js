@@ -22,11 +22,19 @@ function serializeShipment(document) {
     supplier: document.supplier,
     route: document.route,
     carrier: document.carrier,
-    eta: document.eta.toISOString(),
-    status: document.status,
-    risk: document.risk,
+    eta: document.eta?.toISOString() ?? null,
+    status: document.status ?? null,
+    risk: document.risk ?? null,
     initials: document.initials,
     tone: document.tone,
+    buyerRefunds: (document.buyerRefunds ?? []).map(refund => ({
+      amount: refund.amount,
+      currency: refund.currency,
+      fromSupplier: refund.fromSupplier,
+      toSupplier: refund.toSupplier,
+      recordedAt: refund.recordedAt.toISOString(),
+      status: refund.status,
+    })),
   }
 }
 
@@ -159,7 +167,7 @@ app.get('/api/shipments', async (_request, response, next) => {
 
 app.post('/api/shipments', async (request, response, next) => {
   const fields = ['id', 'supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone']
-  const issue = validateFields(request.body, fields, fields)
+  const issue = validateFields(request.body, fields, ['id', 'supplier', 'route', 'carrier', 'initials', 'tone'])
   if (issue) return response.status(400).json({ error: issue })
   try {
     const document = await Shipment.create(request.body)
@@ -170,12 +178,36 @@ app.post('/api/shipments', async (request, response, next) => {
 })
 
 app.patch('/api/shipments/:id', async (request, response, next) => {
-  const fields = ['supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone']
+  const fields = ['supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone', 'buyerRefundAmount']
   const issue = validateFields(request.body, fields)
   if (issue) return response.status(400).json({ error: issue })
   try {
+    const existing = await Shipment.findOne({ id: request.params.id })
+    if (!existing) return response.status(404).json({ error: 'Shipment not found.' })
+    const requestedSupplier = typeof request.body.supplier === 'string' ? request.body.supplier.trim() : request.body.supplier
+    const supplierChanged = requestedSupplier !== undefined && requestedSupplier !== existing.supplier
+    if (supplierChanged && (typeof request.body.buyerRefundAmount !== 'number' || !Number.isFinite(request.body.buyerRefundAmount) || request.body.buyerRefundAmount <= 0)) {
+      return response.status(400).json({ error: 'A positive refund amount in INR is required when changing supplier.' })
+    }
+    if (!supplierChanged && request.body.buyerRefundAmount !== undefined) {
+      return response.status(400).json({ error: 'A refund amount can only be recorded when changing supplier.' })
+    }
+    if (supplierChanged) {
+      const { buyerRefundAmount, ...updates } = request.body
+      const previousSupplier = existing.supplier
+      existing.set(updates)
+      existing.buyerRefunds.push({
+        amount: buyerRefundAmount,
+        currency: 'INR',
+        fromSupplier: previousSupplier,
+        toSupplier: requestedSupplier,
+        recordedAt: new Date(),
+        status: 'Recorded - not processed',
+      })
+      await existing.save()
+      return response.json(serializeShipment(existing))
+    }
     const document = await Shipment.findOneAndUpdate({ id: request.params.id }, request.body, { new: true, runValidators: true })
-    if (!document) return response.status(404).json({ error: 'Shipment not found.' })
     response.json(serializeShipment(document))
   } catch (error) {
     next(error)
@@ -232,8 +264,10 @@ app.patch('/api/inventory/:id', async (request, response, next) => {
   const supplierIssue = validateInventorySuppliers(request.body)
   if (supplierIssue) return response.status(400).json({ error: supplierIssue })
   try {
-    const document = await InventoryItem.findByIdAndUpdate(request.params.id, request.body, { new: true, runValidators: true })
+    const document = await InventoryItem.findById(request.params.id)
     if (!document) return response.status(404).json({ error: 'Inventory item not found.' })
+    document.set(request.body)
+    await document.save()
     response.json(serializeInventory(document))
   } catch (error) {
     next(error)
@@ -394,8 +428,12 @@ app.patch('/api/alerts/:id', async (request, response, next) => {
 })
 
 app.patch('/api/alerts/:id/acknowledge', async (request, response, next) => {
+  const requestedStatus = request.body?.acknowledged
+  if (requestedStatus !== undefined && typeof requestedStatus !== 'boolean') {
+    return response.status(400).json({ error: 'Acknowledged status must be a boolean.' })
+  }
   try {
-    const document = await Alert.findOneAndUpdate({ id: request.params.id }, { acknowledged: true }, { new: true })
+    const document = await Alert.findOneAndUpdate({ id: request.params.id }, { acknowledged: requestedStatus ?? true }, { new: true })
     if (!document) return response.status(404).json({ error: 'Alert not found.' })
     response.json(serializeAlert(document))
   } catch (error) {

@@ -50,11 +50,7 @@ npm run build
 
 ## Deploy to Render
 
-The repository includes a Render Blueprint in [`render.yaml`](./render.yaml). Create or sync the Blueprint from the GitHub repository. Set the following environment variable in Render to enable persistent records:
-
-- `MONGODB_URI` — an authorized MongoDB Atlas connection string.
-
-The dashboard/API starts even if MongoDB is unavailable, but record operations return a database-unavailable error until the connection is restored. This prototype has no sign-in or API access control; do not deploy it publicly with real operational data.
+The repository includes a Render Blueprint in [`render.yaml`](./render.yaml). It intentionally leaves `MONGODB_URI` unset, so the public demo uses synthetic sample records and does not persist operational data. This prototype has no sign-in or API access control; do not configure a real database or use it with operational data unless access control is added first.
 
 ## Future data integration
 

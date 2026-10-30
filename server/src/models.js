@@ -1,15 +1,25 @@
 import mongoose from 'mongoose'
 
+const buyerRefundSchema = new mongoose.Schema({
+  amount: { type: Number, min: 0.01, required: true },
+  currency: { type: String, enum: ['INR'], required: true },
+  fromSupplier: { type: String, required: true, trim: true, maxlength: 120 },
+  toSupplier: { type: String, required: true, trim: true, maxlength: 120 },
+  recordedAt: { type: Date, required: true, default: Date.now },
+  status: { type: String, enum: ['Recorded - not processed'], default: 'Recorded - not processed', required: true },
+}, { _id: false })
+
 const shipmentSchema = new mongoose.Schema({
   id: { type: String, required: true, trim: true, unique: true, maxlength: 40 },
   supplier: { type: String, required: true, trim: true, maxlength: 120 },
   route: { type: String, required: true, trim: true, maxlength: 160 },
   carrier: { type: String, required: true, trim: true, maxlength: 120 },
-  eta: { type: Date, required: true },
-  status: { type: String, enum: ['On track', 'At risk', 'Delayed'], required: true },
-  risk: { type: Number, min: 0, max: 100, required: true },
+  eta: { type: Date },
+  status: { type: String, enum: ['On track', 'At risk', 'Delayed'] },
+  risk: { type: Number, min: 0, max: 100 },
   initials: { type: String, required: true, trim: true, maxlength: 3 },
   tone: { type: String, enum: ['violet', 'blue', 'orange', 'teal'], required: true },
+  buyerRefunds: { type: [buyerRefundSchema], default: [] },
 }, { timestamps: true })
 
 const inventorySchema = new mongoose.Schema({
@@ -20,6 +30,13 @@ const inventorySchema = new mongoose.Schema({
   dailyDemand: { type: Number, min: 0, required: true },
   suppliers: { type: [{ type: String, trim: true, maxlength: 120 }], default: [] },
 }, { timestamps: true })
+
+inventorySchema.pre('validate', function validateInventoryStock(next) {
+  if (this.quantity <= this.safetyStock) {
+    this.invalidate('quantity', 'On-hand quantity must be greater than safety stock.')
+  }
+  next()
+})
 
 const supplierSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, unique: true, maxlength: 120 },
