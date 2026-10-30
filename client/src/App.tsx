@@ -492,7 +492,7 @@ function App() {
 
       <div className="content">
         {demoMode && <div className="demo-banner" role="status"><Sparkles size={16} /><span><strong>Demo workspace</strong> — {inventoryItems.length} inventory items, {suppliers.length} suppliers, {shipments.length} shipments, and {returnRequests.length} returns are shown for preview. Demo additions are temporary and are not saved to MongoDB.</span></div>}
-        {apiError && <div className="api-error" role="alert">{apiError} <button onClick={() => void loadWorkspace().catch(error => setApiError(error instanceof Error ? error.message : 'Could not load database records.'))}>Retry</button></div>}
+        {apiError && !apiError.startsWith('Database is unavailable.') && <div className="api-error" role="alert">{apiError} <button onClick={() => void loadWorkspace().catch(error => setApiError(error instanceof Error ? error.message : 'Could not load database records.'))}>Retry</button></div>}
         <div className="page-heading">
           <div><div className="eyebrow"><span className="eyebrow-line" /> SUPPLY CHAIN · WORKSPACE</div><h1>{title}<span className="wave">✳</span></h1><p>{description}</p></div>
           <div className="heading-actions"><button className="button button-outline" onClick={exportReport}><Download size={16} /> Export report</button><button className="button button-dark" onClick={() => { setShowOnlyAtRiskShipments(false); setSection('Shipments') }}><Plus size={17} /> Manage shipments</button></div>
