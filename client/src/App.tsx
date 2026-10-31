@@ -220,6 +220,82 @@ function SeverityIcon({ kind }: { kind: Alert['icon'] }) {
   return <Truck size={17} />
 }
 
+function shipmentReviewPriority(shipment: Shipment) {
+  if (shipment.status === 'Delayed' || (shipment.risk !== null && shipment.risk >= 70)) return 'High priority'
+  if (shipment.status === 'At risk' || (shipment.risk !== null && shipment.risk >= 40)) return 'Review'
+  return 'Routine'
+}
+
+function ShipmentRiskInsights({
+  shipments,
+  suppliers,
+  onViewShipment,
+  onOpenModel,
+}: {
+  shipments: Shipment[]
+  suppliers: Supplier[]
+  onViewShipment: (id: string) => void
+  onOpenModel: () => void
+}) {
+  const reviewShipments = [...shipments]
+    .filter(shipmentNeedsReview)
+    .sort((left, right) => {
+      const priorityDifference = ['Routine', 'Review', 'High priority'].indexOf(shipmentReviewPriority(right))
+        - ['Routine', 'Review', 'High priority'].indexOf(shipmentReviewPriority(left))
+      return priorityDifference || (right.risk ?? -1) - (left.risk ?? -1)
+    })
+  const selected = reviewShipments[0]
+  const selectedSupplier = selected && suppliers.find(supplier => supplier.name === selected.supplier)
+  const supplierOnTime = selectedSupplier ? Number.parseFloat(selectedSupplier.onTime) : Number.NaN
+  const riskFactors = selected ? [
+    ...(selected.status === 'Delayed' ? ['Shipment status is marked Delayed.'] : []),
+    ...(selected.status === 'At risk' ? ['Shipment status is marked At risk.'] : []),
+    ...(selected.risk !== null && selected.risk >= 70 ? [`Entered shipment risk score is ${selected.risk}/100.`] : []),
+    ...(Number.isFinite(supplierOnTime) && supplierOnTime < 85 ? [`Supplier on-time rate is ${supplierOnTime.toFixed(1)}%.`] : []),
+  ] : []
+  const recommendedAction = selected?.status === 'Delayed'
+    ? 'Contact the carrier and supplier to confirm the shipment location and a revised ETA.'
+    : selected?.status === 'At risk' || (selected?.risk !== null && selected?.risk !== undefined && selected.risk >= 70)
+      ? 'Verify the latest carrier milestone; review inventory and supplier alternatives before changing the assignment.'
+      : 'Confirm the shipment details and continue monitoring the next delivery milestone.'
+
+  return <section className="risk-insights-grid" aria-label="Shipment risk insights">
+    <div className="panel insight-queue-panel">
+      <div className="panel-heading">
+        <div><h2>Disruption triage <span className="heading-count">{reviewShipments.length}</span></h2><p>Flagged from shipment status and entered scores · not ML predictions</p></div>
+        <span className="tool-pill">RECORD-BASED</span>
+      </div>
+      {reviewShipments.length ? <div className="insight-queue">
+        {reviewShipments.slice(0, 4).map(shipment => <button className="insight-queue-row" key={shipment.id} onClick={() => onViewShipment(shipment.id)}>
+          <span className="insight-queue-record"><strong>{shipment.id}</strong><small>{shipment.supplier} · {shipment.status ?? 'Status not set'}</small></span>
+          <span className={`insight-priority insight-priority-${shipmentReviewPriority(shipment).toLowerCase().replace(' ', '-')}`}>{shipmentReviewPriority(shipment)}</span>
+          <span className="insight-record-score">{shipment.risk === null ? 'No score' : `${shipment.risk}/100`}</span>
+          <ArrowRight size={14} />
+        </button>)}
+      </div> : <div className="insight-empty">No shipments are currently flagged by their status or entered risk score.</div>}
+      {reviewShipments.length > 4 && <p className="insight-more">{reviewShipments.length - 4} more flagged shipments</p>}
+    </div>
+
+    <div className="insight-detail-stack">
+      <div className="panel insight-detail-panel">
+        <div className="panel-heading"><div><h2>Risk factors &amp; recommended action</h2><p>{selected ? `${selected.id} · ${shipmentReviewPriority(selected)}` : 'Based on current shipment records'}</p></div><span className="tool-pill">RULE-BASED</span></div>
+        {selected ? <>
+          <ul className="insight-factor-list">
+            {riskFactors.length ? riskFactors.map(factor => <li key={factor}>{factor}</li>) : <li>No elevated status, score, or supplier signals were found in this record.</li>}
+          </ul>
+          <div className="insight-recommendation"><strong>Suggested next step</strong><p>{recommendedAction}</p></div>
+        </> : <div className="insight-empty">Add shipment records to see record-based review factors and suggested next steps.</div>}
+      </div>
+
+      <div className="panel prediction-history-panel">
+        <div className="panel-heading"><div><h2>Prediction history</h2><p>Model service not connected</p></div><Clock3 size={15} /></div>
+        <div className="prediction-history-empty"><strong>No prediction runs yet</strong><span>Historical model scores will appear here after a suitable model is connected and prediction results are saved.</span></div>
+        <button className="text-link" onClick={onOpenModel}>View model &amp; data status <ArrowRight size={14} /></button>
+      </div>
+    </div>
+  </section>
+}
+
 function App() {
   const [section, setSection] = useState<Section>('Overview')
   const [showOnlyAtRiskShipments, setShowOnlyAtRiskShipments] = useState(false)
@@ -543,6 +619,12 @@ function App() {
               <button className="all-alerts-button" onClick={() => setSection('Alerts')}>Go to alert center <ArrowRight size={15} /></button>
             </div>
           </section>
+          <ShipmentRiskInsights
+            shipments={shipments}
+            suppliers={suppliers}
+            onViewShipment={id => { setShowOnlyAtRiskShipments(false); setQuery(id); setSection('Shipments') }}
+            onOpenModel={() => setSection('Model & data')}
+          />
           <section className="bottom-grid">
             <div className="panel shipments-panel">
               <div className="panel-heading"><div><div className="title-with-info"><h2>Shipment activity</h2><span className="table-count">{shipments.length} records</span></div><p>Your most recent shipments across all routes</p></div><button className="text-link" onClick={() => { setShowOnlyAtRiskShipments(false); setSection('Shipments') }}>All shipments <ArrowRight size={14} /></button></div>
