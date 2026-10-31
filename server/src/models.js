@@ -10,6 +10,9 @@ const shipmentSchema = new mongoose.Schema({
   risk: { type: Number, min: 0, max: 100, required: true },
   initials: { type: String, required: true, trim: true, maxlength: 3 },
   tone: { type: String, enum: ['violet', 'blue', 'orange', 'teal'], required: true },
+  refundRequired: { type: Boolean, default: false },
+  refundAmountInr: { type: Number, min: 0, default: null },
+  retentionBenefit: { type: String, enum: ['Super coins', '20% cashback', 'Surprise gift', null], default: null },
 }, { timestamps: true })
 
 const inventorySchema = new mongoose.Schema({

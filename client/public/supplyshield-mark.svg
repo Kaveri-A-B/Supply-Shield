@@ -1,7 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="19" fill="#d9f36a"/>
-  <path d="M32 9 49 16v13c0 12-7.5 21.1-17 26-9.5-4.9-17-14-17-26V16l17-7Z" fill="#16352c"/>
-  <path d="M23 32h7l4-8 5 16 4-8h4" fill="none" stroke="#d9f36a" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.3"/>
-  <circle cx="23" cy="32" r="2" fill="#d9f36a"/>
-  <circle cx="47" cy="32" r="2" fill="#d9f36a"/>
+  <defs>
+    <linearGradient id="mark-gradient" x1="8" y1="7" x2="57" y2="59" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#438bff"/>
+      <stop offset="1" stop-color="#55d9df"/>
+    </linearGradient>
+    <linearGradient id="route-gradient" x1="21" y1="31" x2="49" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78aaff"/>
+      <stop offset="1" stop-color="#79f0dc"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="19" fill="url(#mark-gradient)"/>
+  <path d="M32 9 49 16v13c0 12-7.5 21.1-17 26-9.5-4.9-17-14-17-26V16l17-7Z" fill="#0b1728" stroke="#b7edff" stroke-opacity=".28" stroke-width="1.2"/>
+  <path d="M21 32h9l4-8 5 16 4-8h4" fill="none" stroke="url(#route-gradient)" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.3"/>
+  <circle cx="21" cy="32" r="2" fill="#a6f2f2"/>
+  <circle cx="47" cy="32" r="2" fill="#a6f2f2"/>
 </svg>

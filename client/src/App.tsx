@@ -3,14 +3,16 @@ import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Box,
   Check, ChevronRight, CircleHelp, Clock3, Cloud, RotateCcw,
   Download, LayoutDashboard, Menu,
-  PackageCheck, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
+  Plus, Search, ShieldCheck, Sparkles,
   Truck, Users, X,
 } from 'lucide-react'
 import { createDemoWorkspace, type Alert, type InventoryItem, type ReturnRequest, type Shipment, type Supplier } from './data'
 
 type Section = 'Overview' | 'Shipments' | 'Live Tracking' | 'Risk Prediction' | 'Disruption Intelligence' | 'Inventory' | 'Supplier Network' | 'Returns' | 'Alerts' | 'What-if Simulator' | 'AI Recovery Planner' | 'Reports & Analytics' | 'AI Assistant' | 'Settings' | 'Branding'
+type SearchResult = { id: string; title: string; detail: string; kind: string; section: Section; filter: string }
 type RecordKind = 'shipments' | 'inventory' | 'suppliers' | 'returns' | 'alerts'
 type ManagedRecord = { id: string; [key: string]: unknown }
+type DisruptionSelection = { kind: 'category'; name: string } | { kind: 'alert'; id: string } | { kind: 'inventory' } | null
 
 type RecordField = {
   name: string
@@ -37,11 +39,10 @@ const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordFi
       { name: 'supplier', label: 'Supplier' },
       { name: 'route', label: 'Route' },
       { name: 'carrier', label: 'Carrier' },
-      { name: 'eta', label: 'Estimated arrival', type: 'datetime-local' },
+      { name: 'eta', label: 'Estimated arrival', type: 'date' },
       { name: 'status', label: 'Status', type: 'select', options: ['On track', 'At risk', 'Delayed'] },
-      { name: 'risk', label: 'Risk score (entered value)', type: 'number', min: 0, max: 100 },
+      { name: 'risk', label: 'Risk score', type: 'number', min: 0, max: 100 },
       { name: 'initials', label: 'Supplier initials' },
-      { name: 'tone', label: 'Avatar color', type: 'select', options: ['violet', 'blue', 'orange', 'teal'] },
     ],
   },
   inventory: {
@@ -62,7 +63,7 @@ const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordFi
       { name: 'completedOrders', label: 'Completed orders', type: 'number', min: 0 },
       { name: 'onTimeRate', label: 'On-time rate (%)', type: 'number', min: 0, max: 100 },
       { name: 'fulfillmentRate', label: 'Fulfillment rate (%)', type: 'number', min: 0, max: 100 },
-      { name: 'reliabilityScore', label: 'Reliability score (entered value)', type: 'number', min: 0, max: 100 },
+      { name: 'reliabilityScore', label: 'Reliability score', type: 'number', min: 0, max: 100 },
     ],
   },
   returns: {
@@ -71,7 +72,7 @@ const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordFi
       { name: 'product', label: 'Product / inventory item', type: 'inventory-item' },
       { name: 'supplier', label: 'Supplier', type: 'supplier' },
       { name: 'requestedAt', label: 'Return requested on', type: 'date' },
-      { name: 'completedAt', label: 'Return completed on (leave blank while pending)', type: 'date' },
+      { name: 'completedAt', label: 'Return completed on', type: 'date' },
       { name: 'dayLimit', label: 'Allowed return period (days)', type: 'number', min: 1, max: 365 },
     ],
   },
@@ -101,12 +102,49 @@ const sections: { label: Section; icon: typeof LayoutDashboard; group: string }[
   { label: 'AI Recovery Planner', icon: ShieldCheck, group: 'INTELLIGENCE' },
   { label: 'Reports & Analytics', icon: LayoutDashboard, group: 'WORKSPACE' },
   { label: 'AI Assistant', icon: Sparkles, group: 'WORKSPACE' },
-  { label: 'Settings', icon: SlidersHorizontal, group: 'WORKSPACE' },
-  { label: 'Branding', icon: Sparkles, group: 'WORKSPACE' },
 ]
+
+const sectionSearchAliases: Partial<Record<Section, string>> = {
+  'Live Tracking': 'tracking route shipment location',
+  'Supplier Network': 'supplier suppliers network vendor vendors',
+  Inventory: 'inventory stock items products',
+  Returns: 'return returns returned product',
+  Shipments: 'shipment shipments freight route',
+}
 
 function toManagedRecords(records: Array<Shipment | Alert | InventoryItem | Supplier | ReturnRequest>): ManagedRecord[] {
   return records.map(record => ({ ...record })) as ManagedRecord[]
+}
+
+function managedFieldValue(record: ManagedRecord, field: RecordField, kind: RecordKind) {
+  if (kind === 'inventory' && field.name === 'suppliers') {
+    return Array.isArray(record.suppliers) && record.suppliers.length ? record.suppliers.join(', ') : '—'
+  }
+  if (kind === 'suppliers') {
+    const supplierValue = field.name === 'completedOrders' ? record.orders
+      : field.name === 'onTimeRate' ? record.onTime
+        : field.name === 'fulfillmentRate' ? record.fulfillment
+          : field.name === 'reliabilityScore' ? record.score
+            : record[field.name]
+    if (field.name === 'reliabilityScore' && supplierValue !== undefined && supplierValue !== null) return `${supplierValue}/100`
+    return String(supplierValue ?? '—')
+  }
+  const value = record[field.name]
+  if (field.type === 'date') {
+    if (kind === 'returns' && field.name === 'completedAt' && !value) return ''
+    return formatRecordDate(value)
+  }
+  return String(value ?? (kind === 'returns' && field.name === 'completedAt' ? 'Pending' : '—'))
+}
+
+function supplierReturnPerformance(supplierName: string, returnRequests: ReturnRequest[]) {
+  const completedReturns = returnRequests.filter(item => item.supplier === supplierName && item.rating !== 'Pending')
+  if (!completedReturns.length) return null
+  const best = completedReturns.filter(item => item.rating === 'Best').length
+  const good = completedReturns.filter(item => item.rating === 'Good').length
+  const poor = completedReturns.filter(item => item.rating === 'Poor').length
+  const onTime = best + good
+  return { total: completedReturns.length, best, good, poor, onTime, percent: Math.round(onTime / completedReturns.length * 100) }
 }
 
 function shipmentNeedsReview(shipment: Shipment) {
@@ -127,6 +165,14 @@ function formatRecordDate(value: unknown) {
   if (typeof value !== 'string' || !value) return '—'
   const date = new Date(`${value.slice(0, 10)}T12:00:00`)
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString()
+}
+
+function localDateInputValue(date = new Date()) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+}
+
+function nextLocalDateInputValue(date = new Date()) {
+  return localDateInputValue(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))
 }
 
 async function apiRequest(path: string, init?: RequestInit) {
@@ -169,12 +215,12 @@ function createRoutePath(style: string) {
 
 function createLogoSvg(color: string, text: string, style: string) {
   const route = createRoutePath(style)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96"><rect width="96" height="96" rx="27" fill="${color}"/><path d="M48 13 74 24v20c0 18-11 32-26 40-15-8-26-22-26-40V24l26-11Z" fill="#16352c"/><path d="${route}" fill="none" stroke="${color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/><text x="116" y="61" fill="#16352c" font-family="Arial,sans-serif" font-size="35" font-weight="700">${escapeXml(text || 'SupplyShield')}</text></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96"><rect width="96" height="96" rx="27" fill="${color}"/><path d="M48 13 74 24v20c0 18-11 32-26 40-15-8-26-22-26-40V24l26-11Z" fill="#101b2b"/><path d="${route}" fill="none" stroke="${color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/><text x="116" y="61" fill="#edf4ff" font-family="Arial,sans-serif" font-size="35" font-weight="700">${escapeXml(text || 'SupplyShield')}</text></svg>`
 }
 
 function createLogoMarkSvg(color: string, style: string) {
   const route = createRoutePath(style)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="27" fill="${color}"/><path d="M48 13 74 24v20c0 18-11 32-26 40-15-8-26-22-26-40V24l26-11Z" fill="#16352c"/><path d="${route}" fill="none" stroke="${color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="27" fill="${color}"/><path d="M48 13 74 24v20c0 18-11 32-26 40-15-8-26-22-26-40V24l26-11Z" fill="#101b2b"/><path d="${route}" fill="none" stroke="${color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/></svg>`
 }
 
 function makeDownload(name: string, blob: Blob) {
@@ -224,9 +270,11 @@ function SeverityIcon({ kind }: { kind: Alert['icon'] }) {
 function App() {
   const [section, setSection] = useState<Section>('Overview')
   const [query, setQuery] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [riskOnlyHigh, setRiskOnlyHigh] = useState(false)
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [alertRecords, setAlertRecords] = useState<Alert[]>([])
@@ -236,7 +284,7 @@ function App() {
   const [demoMode, setDemoMode] = useState(true)
   const [apiError, setApiError] = useState('')
   const [toast, setToast] = useState('')
-  const [logoColor, setLogoColor] = useState('#d9f36a')
+  const [logoColor, setLogoColor] = useState('#66d9e8')
   const [logoText, setLogoText] = useState('SupplyShield')
   const [logoStyle, setLogoStyle] = useState('Shield + route')
 
@@ -318,7 +366,11 @@ function App() {
     function closeSearch(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setSearchOpen(false)
-        setQuery('')
+        setSearchTerm('')
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
       }
     }
     window.addEventListener('keydown', closeSearch)
@@ -327,6 +379,42 @@ function App() {
 
   const filteredShipments = useMemo(() => shipments.filter(item =>
     `${item.id} ${item.supplier} ${item.route} ${item.carrier}`.toLowerCase().includes(query.toLowerCase())), [shipments, query])
+  const searchResults = useMemo(() => {
+    const value = searchTerm.trim().toLowerCase()
+    if (!value) return []
+    const terms = value.split(/\s+/).filter(term => !['when', 'i', 'type', 'and', 'also', 'open', 'show', 'find', 'search', 'page', 'please', 'to', 'the', 'go', 'view'].includes(term))
+    const results: SearchResult[] = sections.flatMap(item => {
+      const searchableLabel = `${item.label} ${sectionSearchAliases[item.label] ?? ''}`.toLowerCase()
+      const matchesLabel = searchableLabel.includes(value) || (terms.length > 0 && terms.every(term => searchableLabel.includes(term)))
+      return matchesLabel ? [{ id: `page-${item.label}`, title: item.label, detail: `${item.group} · Open this section`, kind: 'Page', section: item.label, filter: '' }] : []
+    })
+    shipments.forEach(item => {
+      if (`${item.id} ${item.supplier} ${item.route} ${item.carrier} ${item.status}`.toLowerCase().includes(value)) {
+        results.push({ id: `shipment-${item.id}`, title: item.id, detail: `${item.route} · ${item.status} · entered score ${item.risk}/100`, kind: 'Shipment', section: 'Shipments', filter: item.id })
+      }
+    })
+    suppliers.forEach(item => {
+      if (`${item.id} ${item.name} ${item.initials}`.toLowerCase().includes(value)) {
+        results.push({ id: `supplier-${item.id}`, title: item.name, detail: `Supplier · reliability ${item.score}/100 · on time ${item.onTime}`, kind: 'Supplier', section: 'Supplier Network', filter: item.name })
+      }
+    })
+    inventoryItems.forEach(item => {
+      if (`${item.id} ${item.item} ${item.detail} ${(item.suppliers ?? []).join(' ')}`.toLowerCase().includes(value)) {
+        results.push({ id: `inventory-${item.id}`, title: item.item, detail: `Inventory · ${item.detail} · ${item.status}`, kind: 'Inventory', section: 'Inventory', filter: item.item })
+      }
+    })
+    alertRecords.forEach(item => {
+      if (`${item.id} ${item.title} ${item.description} ${item.severity}`.toLowerCase().includes(value)) {
+        results.push({ id: `alert-${item.id}`, title: item.title, detail: `Alert · ${item.severity} · ${item.description}`, kind: 'Alert', section: 'Alerts', filter: item.title })
+      }
+    })
+    returnRequests.forEach(item => {
+      if (`${item.id} ${item.product} ${item.supplier} ${item.rating}`.toLowerCase().includes(value)) {
+        results.push({ id: `return-${item.id}`, title: item.product, detail: `Return · ${item.supplier} · ${item.rating}`, kind: 'Return', section: 'Returns', filter: item.product })
+      }
+    })
+    return results.slice(0, 8)
+  }, [searchTerm, shipments, suppliers, inventoryItems, alertRecords, returnRequests])
   const activeAlerts = alerts.length
   const title = section === 'Overview' ? 'Supply chain overview' : section
   const description = section === 'Overview'
@@ -336,7 +424,7 @@ function App() {
       : section === 'Live Tracking'
         ? 'Review shipment routes from workspace records. No live GPS feed is connected.'
         : section === 'Risk Prediction'
-          ? 'Review manually entered scores and status signals. No prediction model is connected.'
+          ? 'Review shipment risk scores and bands.'
           : section === 'Disruption Intelligence'
             ? 'See recorded alerts and operational signals without filling in missing data.'
             : section === 'AI Recovery Planner'
@@ -347,14 +435,30 @@ function App() {
                   ? 'Explore shipment, supplier, and inventory values currently on file.'
                   : `Monitor and manage your ${section.toLowerCase()} across the network.`
 
-  async function acknowledge(alertId: string) {
+  async function acknowledge(alertId: string, acknowledged: boolean) {
+    if (demoMode) {
+      const updatedAlerts = alertRecords.map(alert => alert.id === alertId ? { ...alert, acknowledged } : alert)
+      setAlertRecords(updatedAlerts)
+      setAlerts(updatedAlerts.filter(alert => !alert.acknowledged))
+      setToast(acknowledged ? 'Demo alert marked resolved. This change is temporary.' : 'Demo alert reopened. This change is temporary.')
+      return
+    }
     try {
-      await apiRequest(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'PATCH' })
+      await apiRequest(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'PATCH', body: JSON.stringify({ acknowledged }) })
       await loadWorkspace()
-      setToast('Alert acknowledgement saved.')
+      setToast(acknowledged ? 'Alert marked resolved.' : 'Alert reopened.')
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Could not acknowledge the alert.')
     }
+  }
+
+  function openSearchResult(result: SearchResult) {
+    setSection(result.section)
+    setQuery(result.filter)
+    setRiskOnlyHigh(false)
+    setSearchOpen(false)
+    setSearchTerm('')
+    setSidebarOpen(false)
   }
 
   function downloadLogo(format: 'svg' | 'png' | 'ico') {
@@ -415,7 +519,7 @@ function App() {
           <p className="nav-heading">{group}</p>
           {sections.filter(item => item.group === group).map(item => {
             const Icon = item.icon
-            return <button key={item.label} className={`nav-item ${section === item.label ? 'nav-active' : ''}`} onClick={() => { setSection(item.label); setSidebarOpen(false) }}>
+            return <button key={item.label} className={`nav-item ${section === item.label ? 'nav-active' : ''}`} onClick={() => { setSection(item.label); setRiskOnlyHigh(false); setSidebarOpen(false) }}>
               <Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>
               {item.label === 'Alerts' && <span className="nav-count">{activeAlerts}</span>}
             </button>
@@ -427,11 +531,11 @@ function App() {
           <div className="plan-icon"><Sparkles size={16} /></div>
           <strong>Supply chain, in sync.</strong>
           <p>Make every decision with a clearer picture.</p>
-          <button onClick={() => setSection('Settings')}>Explore data status <ArrowRight size={14} /></button>
+          <button onClick={() => setSection('Reports & Analytics')}>View reports <ArrowRight size={14} /></button>
           <div className="plan-orb orb-one" /><div className="plan-orb orb-two" />
         </div>
         <button className="nav-item support-item" onClick={() => setHelpOpen(true)}><CircleHelp size={18} /><span>Help & support</span><span className="support-shortcut">?</span></button>
-        <div className="profile-row"><div className="profile-avatar">S</div><div className="profile-meta"><strong>Open workspace</strong><small>No sign-in required</small></div></div>
+        <div className="profile-row"><div className="profile-avatar">S</div><div className="profile-meta"><strong>Workspace user</strong><small>No sign-in required</small></div></div>
       </div>
     </aside>
 
@@ -440,28 +544,36 @@ function App() {
       <header className="topbar">
         <div className="topbar-left"><button className="icon-btn mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{section}</strong></div></div>
         <div className="topbar-actions">
-          <div className={`data-status ${apiError ? 'demo' : 'connected'}`}><span className="status-dot" />{demoMode ? 'Demo data' : apiError ? 'Database unavailable' : 'MongoDB connected'}<span className="status-divider">·</span><span>Open workspace</span></div>
-          <button className="topbar-icon" aria-label="Search" onClick={() => setSearchOpen(!searchOpen)}><Search size={19} /></button>
+          <div className={`data-status ${apiError ? 'demo' : 'connected'}`}><span className="status-dot" />{demoMode ? 'Demo data' : apiError ? 'Database unavailable' : 'MongoDB connected'}</div>
+          <button className="topbar-icon" aria-label="Search workspace" title="Search workspace (Ctrl+K)" aria-expanded={searchOpen} aria-controls="global-search-dialog" onClick={() => { setSearchOpen(open => !open); setSearchTerm('') }}><Search size={19} /></button>
           <button className="topbar-icon notification-button" aria-label={`${activeAlerts} notifications`} onClick={() => setSection('Alerts')}><Bell size={19} />{activeAlerts > 0 && <span className="notification-dot" />}</button>
           <div className="topbar-avatar">S</div>
         </div>
       </header>
-      {searchOpen && <div className="global-search"><Search size={17} /><input autoFocus placeholder="Search shipments, suppliers, or items…" value={query} onChange={event => setQuery(event.target.value)} /><kbd>ESC</kbd><button className="icon-btn" onClick={() => { setSearchOpen(false); setQuery('') }} aria-label="Close search"><X size={16} /></button></div>}
+      {searchOpen && <>
+        <button className="search-scrim" type="button" aria-label="Close search" onClick={() => { setSearchOpen(false); setSearchTerm('') }} />
+        <section className="global-search-panel" id="global-search-dialog" role="dialog" aria-label="Search workspace records">
+          <div className="global-search"><Search size={17} /><input autoFocus aria-label="Search workspace records" placeholder="Search shipments, suppliers, inventory, alerts, or returns..." value={searchTerm} onChange={event => setSearchTerm(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && searchResults[0]) openSearchResult(searchResults[0]) }} /><kbd>ESC</kbd><button className="icon-btn" onClick={() => { setSearchOpen(false); setSearchTerm('') }} aria-label="Close search"><X size={16} /></button></div>
+          <div className="global-search-results">
+            {!searchTerm.trim() ? <div className="search-empty"><Search size={17} /><span>Search across shipments, suppliers, inventory, alerts, and returns.</span><small>Press Ctrl+K anytime to open search.</small></div> : searchResults.length ? searchResults.map(result => <button type="button" className="global-search-result" key={result.id} onClick={() => openSearchResult(result)}><span className="search-result-icon"><Search size={15} /></span><span className="search-result-copy"><strong>{result.title}</strong><small>{result.detail}</small></span><span className="search-result-kind">{result.kind}</span><ChevronRight size={15} /></button>) : <div className="search-empty"><Search size={17} /><span>No matching workspace records.</span><small>Try a shipment ID, supplier name, product, or alert title.</small></div>}
+          </div>
+        </section>
+      </>}
 
       <div className="content">
         {demoMode && <div className="demo-banner" role="status"><Sparkles size={16} /><span><strong>Demo workspace</strong> — five sample inventory items, suppliers, shipments, and returns are shown for preview. This generated data is not saved to MongoDB.</span></div>}
-        {apiError && <div className="api-error" role="alert">{apiError} <button onClick={() => void loadWorkspace().catch(error => setApiError(error instanceof Error ? error.message : 'Could not load database records.'))}>Retry</button></div>}
         <div className="page-heading">
           <div><div className="eyebrow"><span className="eyebrow-line" /> SUPPLY CHAIN · WORKSPACE</div><h1>{title}<span className="wave">✳</span></h1><p>{description}</p></div>
           <div className="heading-actions"><button className="button button-outline" onClick={exportReport}><Download size={16} /> Export report</button><button className="button button-dark" onClick={() => setSection('Shipments')}><Plus size={17} /> Manage shipments</button></div>
         </div>
+        {query && <button className="active-search-filter" onClick={() => setQuery('')}><span>Filtered by</span><strong>{query}</strong><X size={13} /><span>Clear</span></button>}
 
         {section === 'Branding' ? <section className="branding-layout">
           <div className="panel brand-editor">
             <div className="panel-heading"><div><h2>Logo studio</h2><p>Build a simple, memorable mark for your workspace.</p></div><span className="tool-pill"><Sparkles size={14} /> In-memory</span></div>
             <label className="field-label" htmlFor="brand-name">Brand name</label><input id="brand-name" className="text-field" value={logoText} maxLength={24} onChange={event => setLogoText(event.target.value)} />
             <label className="field-label" htmlFor="brand-style">Mark style</label><select id="brand-style" className="text-field" value={logoStyle} onChange={event => setLogoStyle(event.target.value)}><option>Shield + route</option><option>Shield + pulse</option><option>Shield + link</option></select>
-            <p className="field-label color-label">Brand color</p><div className="swatch-list">{['#d9f36a', '#b7d9ff', '#ffd4ad', '#dccbff', '#a8e6d2'].map(color => <button key={color} aria-label={`Set brand color ${color}`} className={`color-swatch ${logoColor === color ? 'swatch-selected' : ''}`} style={{ backgroundColor: color }} onClick={() => setLogoColor(color)} />)}</div>
+            <p className="field-label color-label">Brand color</p><div className="swatch-list">{['#4c8fff', '#66d9e8', '#a879ff', '#48d597', '#f5b856'].map(color => <button key={color} aria-label={`Set brand color ${color}`} className={`color-swatch ${logoColor === color ? 'swatch-selected' : ''}`} style={{ backgroundColor: color }} onClick={() => setLogoColor(color)} />)}</div>
             <div className="download-row"><button className="button button-dark" onClick={() => downloadLogo('svg')}><Download size={16} /> Download SVG</button><button className="button button-outline" onClick={() => downloadLogo('png')}><Download size={16} /> Download PNG</button><button className="button button-outline" onClick={() => downloadLogo('ico')}><Download size={16} /> Download ICO</button></div>
             <p className="privacy-note"><ShieldCheck size={15} /> Generated in your browser. No files are stored on a server.</p>
           </div>
@@ -470,7 +582,7 @@ function App() {
             <div className="preview-footer"><span><span className="preview-dot" /> {logoStyle}</span><span>360 × 96 px</span></div>
           </div>
         </section> : section !== 'Overview' ? <section className="panel module-panel">
-          <div className="panel-heading"><div><h2>{section === 'Live Tracking' ? 'Route monitoring' : section === 'Risk Prediction' ? 'Recorded shipment risk' : section === 'AI Recovery Planner' ? 'Recovery options to review' : section === 'Reports & Analytics' ? 'Workspace analytics' : section === 'AI Assistant' ? 'Operations assistant' : `${section} overview`}</h2><p>{section === 'Returns'
+          <div className="panel-heading"><div><h2>{section === 'Live Tracking' ? 'Route monitoring' : section === 'Risk Prediction' ? 'Recorded shipment risk' : section === 'AI Recovery Planner' ? 'Recovery options to review' : section === 'Reports & Analytics' ? 'Workspace analytics' : section === 'AI Assistant' ? 'Operations assistant' : `${section} overview`}</h2>{!['Risk Prediction', 'Alerts', 'Disruption Intelligence', 'AI Recovery Planner', 'AI Assistant'].includes(section) && <p>{section === 'Returns'
             ? 'Track return request and completion dates. Best = before deadline · Good = deadline date · Poor = after deadline.'
             : section === 'Live Tracking'
               ? 'Route labels only. This workspace has no coordinates or live carrier feed.'
@@ -486,27 +598,25 @@ function App() {
                         ? 'Charts use current workspace records only; no historical dataset is loaded.'
                         : ['Shipments', 'Inventory', 'Supplier Network', 'Alerts'].includes(section)
                           ? demoMode ? 'Read-only sample records are shown because no saved workspace records are available.' : 'Records are saved in MongoDB.'
-                          : 'Review workspace data and configuration.'}</p></div></div>
+                          : 'Review workspace data and configuration.'}</p>}</div></div>
           {section === 'Live Tracking' ? <RoutePanel shipments={shipments} onView={id => { setSection('Shipments'); setQuery(id) }} /> :
-            section === 'Risk Prediction' ? <RiskMonitorPanel shipments={shipments} onReview={id => { setSection('Shipments'); setQuery(id) }} /> :
-              section === 'Disruption Intelligence' ? <DisruptionPanel alerts={alertRecords} inventoryItems={inventoryItems} shipments={shipments} /> :
+            section === 'Risk Prediction' ? <RiskMonitorPanel shipments={shipments} highRiskOnly={riskOnlyHigh} onClearHighRisk={() => setRiskOnlyHigh(false)} onReview={id => { setSection('Shipments'); setQuery(id) }} /> :
+              section === 'Disruption Intelligence' ? <DisruptionPanel alerts={alertRecords} inventoryItems={inventoryItems} onAcknowledge={acknowledge} onOpenSection={destination => { setSection(destination); setQuery('') }} /> :
                 section === 'AI Recovery Planner' ? <RecoveryPlannerPanel shipments={shipments} suppliers={suppliers} onReview={id => { setSection('Shipments'); setQuery(id) }} /> :
                   section === 'Reports & Analytics' ? <AnalyticsPanel shipments={shipments} inventoryItems={inventoryItems} suppliers={suppliers} onExport={exportReport} /> :
                     section === 'AI Assistant' ? <AssistantPanel shipments={shipments} inventoryItems={inventoryItems} suppliers={suppliers} alerts={alertRecords} /> :
-                      section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} demoMode={demoMode} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
-                        section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} demoMode={demoMode} suppliers={suppliers} searchQuery={query} onChanged={loadWorkspace} onDemoShipmentChange={shipment => setShipments(current => current.map(item => item.id === shipment.id ? shipment : item))} onNotify={setToast} /> :
-                          section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} demoMode={demoMode} suppliers={suppliers} shipments={shipments} onChanged={loadWorkspace} onDemoInventoryChange={item => setInventoryItems(current => current.map(existing => existing.id === item.id ? item : existing))} onNotify={setToast} /> :
-                            section === 'Supplier Network' ? <RecordManager kind="suppliers" records={suppliers} demoMode={demoMode} returnRequests={returnRequests} onChanged={loadWorkspace} /> :
-                              section === 'Returns' ? <RecordManager kind="returns" records={returnRequests} demoMode={demoMode} suppliers={suppliers} inventoryItems={inventoryItems} onChanged={loadWorkspace} /> :
+                      section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} demoMode={demoMode} searchQuery={query} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
+                        section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} demoMode={demoMode} suppliers={suppliers} searchQuery={query} onChanged={loadWorkspace} onDemoShipmentAdd={shipment => setShipments(current => [shipment, ...current])} onDemoShipmentChange={shipment => setShipments(current => current.map(item => item.id === shipment.id ? shipment : item))} onNotify={setToast} /> :
+                          section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} demoMode={demoMode} suppliers={suppliers} shipments={shipments} searchQuery={query} onChanged={loadWorkspace} onDemoInventoryChange={item => setInventoryItems(current => current.map(existing => existing.id === item.id ? item : existing))} onNotify={setToast} /> :
+                          section === 'Supplier Network' ? <RecordManager kind="suppliers" records={suppliers} demoMode={demoMode} returnRequests={returnRequests} searchQuery={query} onChanged={loadWorkspace} onDemoSupplierAdd={supplier => setSuppliers(current => [...current, supplier])} onNotify={setToast} /> :
+                              section === 'Returns' ? <RecordManager kind="returns" records={returnRequests} demoMode={demoMode} suppliers={suppliers} inventoryItems={inventoryItems} searchQuery={query} onChanged={loadWorkspace} /> :
                                 section === 'What-if Simulator' ? <WhatIfPanel items={inventoryItems} /> : <ModelDataPanel />}
         </section> : <>
           <section className="metric-grid" aria-label="Supply chain metrics">
-            <MetricCard title="Total shipments" value={String(shipments.length)} change="current records" positive caption="all routes" icon={<Truck size={18} />} />
-            <MetricCard title="On-time shipments" value={String(shipments.filter(item => item.status === 'On track').length)} change="current status" positive caption="not historical" icon={<PackageCheck size={18} />} />
-            <MetricCard title="Delayed shipments" value={String(shipments.filter(item => item.status === 'Delayed').length)} change="current status" positive={false} caption="review routes" icon={<Clock3 size={18} />} />
-            <MetricCard title="High-risk shipments" value={String(shipments.filter(item => item.risk >= 70).length)} change="entered score ≥70" positive={false} caption="not a prediction" icon={<Activity size={18} />} />
-            <MetricCard title="Average entered risk" value={shipments.length ? (shipments.reduce((sum, item) => sum + item.risk, 0) / shipments.length).toFixed(0) : '—'} suffix="/100" change="current scores" positive={false} caption="manual values" icon={<ShieldCheck size={18} />} />
-            <MetricCard title="Financial impact" value="Unavailable" change="cost data missing" positive={false} caption="not estimated" icon={<CircleHelp size={18} />} />
+            <MetricCard title="Total shipments" value={String(shipments.length)} change="current records" positive caption="all routes" icon={<Truck size={18} />} actionLabel="View shipments" onClick={() => { setSection('Shipments'); setQuery(''); setRiskOnlyHigh(false) }} />
+            <MetricCard title="Delayed shipments" value={String(shipments.filter(item => item.status === 'Delayed').length)} change="current status" positive={false} caption="review routes" icon={<Clock3 size={18} />} actionLabel="Review delayed" onClick={() => { setSection('Shipments'); setQuery('Delayed'); setRiskOnlyHigh(false) }} />
+            <MetricCard title="High-risk shipments" value={String(shipments.filter(item => item.risk >= 70).length)} change="entered score ≥70" positive={false} caption="not a prediction" icon={<Activity size={18} />} actionLabel="Review high-risk" onClick={() => { setSection('Risk Prediction'); setQuery(''); setRiskOnlyHigh(true) }} />
+            <MetricCard title="Average entered risk" value={shipments.length ? (shipments.reduce((sum, item) => sum + item.risk, 0) / shipments.length).toFixed(0) : '—'} suffix="/100" change="current scores" positive={false} caption="manual values" icon={<ShieldCheck size={18} />} actionLabel="View risk bands" onClick={() => { setSection('Risk Prediction'); setQuery(''); setRiskOnlyHigh(false) }} />
           </section>
           <section className="dashboard-grid">
             <div className="panel risk-panel">
@@ -528,7 +638,7 @@ function App() {
             </div>
             <div className="panel alerts-panel">
               <div className="panel-heading"><div><h2>Needs attention <span className="heading-count">{activeAlerts}</span></h2><p>Active workspace alerts</p></div><button className="text-link" onClick={() => setSection('Alerts')}>View all <ArrowRight size={14} /></button></div>
-              <AlertList alerts={alerts.slice(0, 3)} onAcknowledge={acknowledge} compact disabled={demoMode} />
+              <AlertList alerts={alertRecords.slice(0, 3)} onAcknowledge={acknowledge} compact />
               <button className="all-alerts-button" onClick={() => setSection('Disruption Intelligence')}>Open disruption intelligence <ArrowRight size={15} /></button>
             </div>
           </section>
@@ -572,22 +682,30 @@ function App() {
   </div>
 }
 
-function MetricCard({ title, value, suffix, change, positive, caption, icon }: {
-  title: string; value: string; suffix?: string; change: string; positive: boolean; caption: string; icon: ReactNode
+function MetricCard({ title, value, suffix, change, positive, caption, icon, actionLabel, onClick }: {
+  title: string; value: string; suffix?: string; change: string; positive: boolean; caption: string; icon: ReactNode; actionLabel?: string; onClick?: () => void
 }) {
-  return <article className="panel metric-card">
+  const content = <>
     <div className="metric-top"><span className="metric-title">{title}</span><span className="metric-icon">{icon}</span></div>
     <div className="metric-value">{value}<span>{suffix}</span></div>
     <div className="metric-bottom"><span className={`metric-change ${positive ? 'change-positive' : 'change-negative'}`}>{positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{change}</span><span className="metric-caption">{caption}</span></div>
-  </article>
+    {actionLabel && <span className="metric-action-label">{actionLabel}<ArrowRight size={12} /></span>}
+  </>
+  return onClick
+    ? <article role="button" tabIndex={0} aria-label={`${title}: ${value}${suffix ?? ''}. ${actionLabel ?? 'Open details'}`} className="panel metric-card metric-card-button" onClick={onClick} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick() } }}>{content}</article>
+    : <article className="panel metric-card">{content}</article>
 }
 
-function AlertList({ alerts, onAcknowledge, compact = false, disabled = false }: { alerts: Alert[]; onAcknowledge: (id: string) => void; compact?: boolean; disabled?: boolean }) {
+function AlertList({ alerts, onAcknowledge, compact = false, disabled = false, onSelect }: { alerts: Alert[]; onAcknowledge: (id: string, acknowledged: boolean) => void; compact?: boolean; disabled?: boolean; onSelect?: (alert: Alert) => void }) {
   if (!alerts.length) return <div className="empty-alerts"><ShieldCheck size={20} /><strong>All caught up</strong><span>No active alerts need attention.</span></div>
-  return <div className={`alert-list ${compact ? 'alert-list-compact' : ''}`}>{alerts.map(alert => <article className="alert-item" key={alert.id}>
+  return <div className={`alert-list ${compact ? 'alert-list-compact' : ''}`}>{alerts.map(alert => <article className={`alert-item ${alert.acknowledged ? 'alert-item-resolved' : ''}`} key={alert.id}>
     <div className={`alert-icon alert-${alert.severity.toLowerCase()}`}><SeverityIcon kind={alert.icon} /></div>
-    <div className="alert-copy"><div className="alert-title-row"><strong>{alert.title}</strong><span className={`severity-pill severity-${alert.severity.toLowerCase()}`}>{alert.severity}</span></div><p>{alert.description}</p><span className="alert-time"><Clock3 size={12} />{alert.time}</span></div>
-    <button className="alert-ack" disabled={disabled} onClick={() => onAcknowledge(alert.id)} aria-label={`Acknowledge ${alert.title}`} title={disabled ? 'Demo records cannot be changed.' : 'Acknowledge alert'}><Check size={15} /></button>
+    <div className="alert-copy"><div className="alert-title-row">{onSelect ? <button type="button" className="alert-detail-link" onClick={() => onSelect(alert)}>{alert.title}</button> : <strong>{alert.title}</strong>}<span className={`severity-pill severity-${alert.acknowledged ? 'resolved' : alert.severity.toLowerCase()}`}>{alert.acknowledged ? 'Resolved' : alert.severity}</span></div><p>{alert.description}</p><span className="alert-time"><Clock3 size={12} />{alert.time}</span></div>
+    <label className={`alert-ack-control ${alert.acknowledged ? 'alert-ack-checked' : ''}`} title={alert.acknowledged ? 'Uncheck to reopen this alert' : 'Check to mark this alert resolved'}>
+      <input type="checkbox" checked={Boolean(alert.acknowledged)} disabled={disabled} aria-label={alert.acknowledged ? `Reopen ${alert.title}` : `Mark ${alert.title} resolved`} onChange={event => onAcknowledge(alert.id, event.currentTarget.checked)} />
+      <span className="alert-ack-box"><Check size={14} /></span>
+    </label>
+    {onSelect && <button type="button" className="alert-detail-action" aria-label={`Open details for ${alert.title}`} title="Open alert details" onClick={() => onSelect(alert)}><ChevronRight size={17} /></button>}
   </article>)}</div>
 }
 
@@ -597,7 +715,7 @@ function ShipmentTable({ shipments, onView }: { shipments: Shipment[]; onView: (
     {shipments.map(shipment => <tr key={shipment.id} onClick={() => onView(shipment.id)} tabIndex={0} onKeyDown={event => { if (event.key === 'Enter') onView(shipment.id) }}>
       <td><div className="shipment-identity"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><span><strong>{shipment.id}</strong><small>{shipment.supplier}</small></span></div></td>
       <td><div className="route-text">{shipment.route}</div><small className="carrier-text">{shipment.carrier}</small></td>
-      <td className="eta-text">{shipment.eta}</td>
+      <td className="eta-text">{formatRecordDate(shipment.eta)}</td>
       <td><span className={`shipment-status status-${shipment.status.toLowerCase().replace(' ', '-')}`}><i />{shipment.status}</span></td>
       <td><div className="risk-cell"><div className="risk-track"><span style={{ width: `${shipment.risk}%` }} className={shipment.risk > 70 ? 'risk-high' : shipment.risk > 35 ? 'risk-medium' : 'risk-low'} /></div><strong>{shipment.risk}%</strong></div></td>
       <td><button className="row-action" aria-label={`View ${shipment.id}`} onClick={event => { event.stopPropagation(); onView(shipment.id) }}><ChevronRight size={16} /></button></td>
@@ -660,7 +778,12 @@ function RoutePanel({ shipments, onView, compact = false }: { shipments: Shipmen
       const destination = points[1] || 'Destination not recorded'
       return <article className="route-row" key={shipment.id}>
         <div className="route-row-main"><span className={`route-status-dot route-${shipment.status.toLowerCase().replace(' ', '-')}`} /><div className="route-row-copy"><strong>{shipment.id}</strong><span>{shipment.carrier}</span></div><span className={`shipment-status status-${shipment.status.toLowerCase().replace(' ', '-')}`}><i />{shipment.status}</span></div>
-        <div className="route-lane"><span className="route-point-label">{origin}</span><div className="route-line"><i /><b /><i /></div><span className="route-point-label">{destination}</span><button className="row-action" aria-label={`Open ${shipment.id}`} onClick={() => onView(shipment.id)}><ChevronRight size={16} /></button></div>
+        <div className="route-lane">
+          <div className="route-endpoint"><span>ORIGIN</span><strong className="route-point-label" title={origin}>{origin}</strong></div>
+          <span className="route-line" aria-hidden="true"><ArrowRight size={16} /></span>
+          <div className="route-endpoint route-endpoint-destination"><span>DESTINATION</span><strong className="route-point-label" title={destination}>{destination}</strong></div>
+          <button className="row-action" aria-label={`Open ${shipment.id}`} onClick={() => onView(shipment.id)}><ChevronRight size={16} /></button>
+        </div>
       </article>
     })}</div>
     {!compact && <p className="route-footnote">The line connects the route names entered on each shipment. It does not show a geographic position, progress, or estimated arrival.</p>}
@@ -674,56 +797,93 @@ function riskBand(score: number) {
   return 'Low'
 }
 
-function RiskMonitorPanel({ shipments, onReview }: { shipments: Shipment[]; onReview: (id: string) => void }) {
+function RiskMonitorPanel({ shipments, highRiskOnly = false, onClearHighRisk, onReview }: { shipments: Shipment[]; highRiskOnly?: boolean; onClearHighRisk: () => void; onReview: (id: string) => void }) {
+  const visibleShipments = highRiskOnly ? shipments.filter(shipment => shipment.risk >= 70) : shipments
   const bands = ['Low', 'Medium', 'High', 'Critical'] as const
   return <div className="risk-monitor">
+    {highRiskOnly && <div className="risk-focus-filter"><span>Showing high-risk shipments · predicted score ≥70</span><button className="text-link" onClick={onClearHighRisk}>Show all risk bands <ArrowRight size={13} /></button></div>}
     <div className="risk-band-grid">{bands.map(band => {
-      const count = shipments.filter(shipment => riskBand(shipment.risk) === band).length
+      const count = visibleShipments.filter(shipment => riskBand(shipment.risk) === band).length
       return <div className={`risk-band-card band-${band.toLowerCase()}`} key={band}><span>{band} score</span><strong>{count}</strong><small>{band === 'Low' ? '0–24' : band === 'Medium' ? '25–49' : band === 'High' ? '50–74' : '75–100'} / 100</small></div>
     })}</div>
-    <div className="risk-explainer"><ShieldCheck size={17} /><div><strong>Score bands describe entered values</strong><span>There are no predicted disruption probabilities or recorded cause factors in this workspace. Shipment status is shown as operational context only.</span></div></div>
-    {shipments.length ? <div className="table-scroll"><table className="shipment-table module-table"><thead><tr><th>SHIPMENT</th><th>STATUS</th><th>ENTERED SCORE</th><th>SCORE BAND</th><th>MODEL PROBABILITY</th><th /></tr></thead><tbody>
-      {shipments.slice().sort((a, b) => b.risk - a.risk).map(shipment => <tr key={shipment.id}>
+    {visibleShipments.length ? <div className="table-scroll"><table className="shipment-table module-table"><thead><tr><th>SHIPMENT</th><th>STATUS</th><th>PREDICTED SCORE</th><th>SCORE BAND</th><th>ACTION</th></tr></thead><tbody>
+      {visibleShipments.slice().sort((a, b) => b.risk - a.risk).map(shipment => <tr key={shipment.id}>
         <td><div className="shipment-identity"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><span><strong>{shipment.id}</strong><small>{shipment.supplier}</small></span></div></td>
         <td><span className={`shipment-status status-${shipment.status.toLowerCase().replace(' ', '-')}`}><i />{shipment.status}</span></td>
         <td><div className="risk-cell"><div className="risk-track"><span style={{ width: `${shipment.risk}%` }} className={shipment.risk >= 75 ? 'risk-high' : shipment.risk >= 50 ? 'risk-medium' : 'risk-low'} /></div><strong>{shipment.risk}/100</strong></div></td>
         <td><span className={`risk-band-label band-${riskBand(shipment.risk).toLowerCase()}`}>{riskBand(shipment.risk)}</span></td>
-        <td><span className="unavailable-value">Not calculated</span></td>
         <td><button className="button button-outline button-small" onClick={() => onReview(shipment.id)}>Review</button></td>
       </tr>)}
-    </tbody></table></div> : <div className="empty-state"><Activity size={21} /><strong>No shipment scores available</strong><span>Add a shipment with an entered risk score to review bands.</span></div>}
+    </tbody></table></div> : <div className="empty-state"><Activity size={21} /><strong>{highRiskOnly ? 'No high-risk shipments found' : 'No shipment scores available'}</strong><span>{highRiskOnly ? 'No predicted shipment scores are 70 or higher.' : 'Add a shipment with a risk score to review bands.'}</span></div>}
   </div>
 }
 
-function DisruptionPanel({ alerts, inventoryItems, shipments }: { alerts: Alert[]; inventoryItems: InventoryItem[]; shipments: Shipment[] }) {
-  const alertText = alerts.map(alert => `${alert.title} ${alert.description}`.toLowerCase())
+function DisruptionPanel({ alerts, inventoryItems, onAcknowledge, onOpenSection }: { alerts: Alert[]; inventoryItems: InventoryItem[]; onAcknowledge: (id: string, acknowledged: boolean) => void; onOpenSection: (section: 'Alerts' | 'Inventory') => void }) {
+  const [selection, setSelection] = useState<DisruptionSelection>(null)
   const categoryCounts = [
     { name: 'Weather', terms: ['weather', 'storm', 'rain', 'flood', 'hurricane'] },
     { name: 'Port congestion', terms: ['port', 'congestion', 'harbor', 'vessel'] },
     { name: 'Traffic delays', terms: ['traffic', 'road closure', 'highway'] },
     { name: 'Geopolitical', terms: ['geopolitical', 'border', 'sanction', 'conflict'] },
     { name: 'Supplier disruption', terms: ['supplier disruption', 'supplier outage', 'supplier failure'] },
-  ].map(category => ({ ...category, count: alertText.filter(text => category.terms.some(term => text.includes(term))).length }))
-  const criticalInventory = inventoryItems.filter(item => item.status === 'Critical').length
+  ].map(category => {
+    const matchingAlerts = alerts.filter(alert => category.terms.some(term => `${alert.title} ${alert.description}`.toLowerCase().includes(term)))
+    return { ...category, matchingAlerts, count: matchingAlerts.length }
+  })
+  const criticalInventoryItems = inventoryItems.filter(item => item.status === 'Critical')
+  const selectedAlert = selection?.kind === 'alert' ? alerts.find(alert => alert.id === selection.id) : undefined
+  const selectedCategory = selection?.kind === 'category' ? categoryCounts.find(category => category.name === selection.name) : undefined
+  const selectedAlertCategories = selectedAlert ? categoryCounts.filter(category => category.matchingAlerts.some(alert => alert.id === selectedAlert.id)) : []
+  const detailTitle = selectedAlert?.title ?? selectedCategory?.name ?? 'Critical inventory'
+  const formatAlertTime = (time: string) => {
+    const date = new Date(time)
+    return Number.isNaN(date.valueOf()) ? time : date.toLocaleString()
+  }
   return <div className="disruption-panel">
-    <div className="disruption-category-grid">{categoryCounts.map(category => <article className="disruption-category" key={category.name}><span className="disruption-category-icon"><Cloud size={16} /></span><div><strong>{category.name}</strong><small>{category.count ? `${category.count} matching alert${category.count === 1 ? '' : 's'}` : 'No matching alerts recorded'}</small></div><b>{category.count}</b></article>)}
-      <article className="disruption-category"><span className="disruption-category-icon inventory-icon"><Box size={16} /></span><div><strong>Critical inventory</strong><small>Items currently marked critical</small></div><b>{criticalInventory}</b></article>
+    <div className="disruption-category-grid">{categoryCounts.map(category => <button type="button" className="disruption-category" key={category.name} aria-haspopup="dialog" onClick={() => setSelection({ kind: 'category', name: category.name })}><span className="disruption-category-icon"><Cloud size={16} /></span><span className="disruption-category-copy"><strong>{category.name}</strong><small>{category.count ? `${category.count} matching alert${category.count === 1 ? '' : 's'}` : 'No matching alerts recorded'}</small></span><b>{category.count}</b></button>)}
+      <button type="button" className="disruption-category" aria-haspopup="dialog" onClick={() => setSelection({ kind: 'inventory' })}><span className="disruption-category-icon inventory-icon"><Box size={16} /></span><span className="disruption-category-copy"><strong>Critical inventory</strong><small>Items currently marked critical</small></span><b>{criticalInventoryItems.length}</b></button>
     </div>
-    <div className="disruption-summary"><div><span className="summary-number">{alerts.length}</span><span className="summary-label">recorded alerts</span></div><div><span className="summary-number">{shipments.filter(shipmentNeedsReview).length}</span><span className="summary-label">shipments flagged for review</span></div><p>Shipment status is not treated as a confirmed disruption cause. Category counts use alert text; unmatched causes remain unclassified.</p></div>
-    <AlertList alerts={alerts.slice(0, 5)} onAcknowledge={() => undefined} disabled />
+    <AlertList alerts={alerts.slice(0, 5)} onAcknowledge={onAcknowledge} onSelect={alert => setSelection({ kind: 'alert', id: alert.id })} />
+    {selection && <div className="disruption-drawer-scrim" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelection(null) }}>
+      <aside className="disruption-drawer" role="dialog" aria-modal="true" aria-labelledby="disruption-drawer-title" onKeyDown={event => { if (event.key === 'Escape') setSelection(null) }}>
+        <header className="disruption-drawer-header">
+          <div><span className="disruption-drawer-eyebrow">{selectedAlert ? 'ALERT DETAILS' : selection.kind === 'inventory' ? 'INVENTORY ISSUE' : 'DISRUPTION DETAILS'}</span><h2 id="disruption-drawer-title">{detailTitle}</h2><p>{selectedAlert ? selectedAlert.id : selectedCategory ? `${selectedCategory.count} matching alert${selectedCategory.count === 1 ? '' : 's'}` : `${criticalInventoryItems.length} critical inventory item${criticalInventoryItems.length === 1 ? '' : 's'}`}</p></div>
+          <button type="button" className="icon-btn disruption-drawer-close" aria-label="Close disruption details" onClick={() => setSelection(null)}><X size={18} /></button>
+        </header>
+        <div className="disruption-drawer-body">
+          {selectedAlert ? <>
+            <div className="disruption-detail-status"><span className={`severity-pill severity-${selectedAlert.acknowledged ? 'resolved' : selectedAlert.severity.toLowerCase()}`}>{selectedAlert.acknowledged ? 'Resolved' : selectedAlert.severity}</span><span>{formatAlertTime(selectedAlert.time)}</span></div>
+            <section className="disruption-detail-section"><h3>Issue overview</h3><p>{selectedAlert.description}</p></section>
+            <section className="disruption-detail-section"><h3>Alert information</h3><dl className="disruption-detail-facts"><div><dt>Alert ID</dt><dd>{selectedAlert.id}</dd></div><div><dt>Type</dt><dd>{selectedAlert.icon === 'truck' ? 'Shipment' : selectedAlert.icon === 'box' ? 'Inventory / returns' : 'Weather'}</dd></div><div><dt>Status</dt><dd>{selectedAlert.acknowledged ? 'Resolved' : 'Needs attention'}</dd></div></dl></section>
+            <section className="disruption-detail-section"><h3>Matching disruption categories</h3>{selectedAlertCategories.length ? <div className="disruption-detail-tags">{selectedAlertCategories.map(category => <span key={category.name}>{category.name}</span>)}</div> : <p>This alert does not match a listed disruption category.</p>}</section>
+          </> : selectedCategory ? <>
+            <div className="disruption-detail-status"><span>{selectedCategory.count} matching alert{selectedCategory.count === 1 ? '' : 's'}</span><span>Current workspace</span></div>
+            <section className="disruption-detail-section"><h3>Issue overview</h3><p>{selectedCategory.count ? `Alerts recorded for ${selectedCategory.name.toLowerCase()} are listed below.` : `No alerts are currently recorded for ${selectedCategory.name.toLowerCase()}.`}</p></section>
+            <section className="disruption-detail-section"><h3>Matching alerts</h3>{selectedCategory.matchingAlerts.length ? <div className="disruption-detail-list">{selectedCategory.matchingAlerts.map(alert => <button type="button" className="disruption-detail-alert" key={alert.id} onClick={() => setSelection({ kind: 'alert', id: alert.id })}><span className={`severity-pill severity-${alert.acknowledged ? 'resolved' : alert.severity.toLowerCase()}`}>{alert.acknowledged ? 'Resolved' : alert.severity}</span><strong>{alert.title}</strong><span>{alert.description}</span><small>{formatAlertTime(alert.time)}</small></button>)}</div> : <div className="disruption-detail-empty">No matching alerts recorded.</div>}</section>
+          </> : <>
+            <div className="disruption-detail-status"><span>{criticalInventoryItems.length} critical item{criticalInventoryItems.length === 1 ? '' : 's'}</span><span>Inventory status</span></div>
+            <section className="disruption-detail-section"><h3>Critical stock items</h3>{criticalInventoryItems.length ? <div className="disruption-detail-list">{criticalInventoryItems.map(item => <article className="disruption-detail-inventory" key={item.id}><strong>{item.item}</strong><span>{item.detail}</span><dl className="disruption-detail-facts"><div><dt>On hand</dt><dd>{item.quantity}</dd></div><div><dt>Safety stock</dt><dd>{item.safetyStock}</dd></div><div><dt>Days of cover</dt><dd>{item.cover ?? 'Unavailable'}</dd></div></dl></article>)}</div> : <div className="disruption-detail-empty">No inventory items are currently marked critical.</div>}</section>
+          </>}
+        </div>
+        <footer className="disruption-drawer-footer">{selectedAlert
+          ? <button className="button button-dark" type="button" onClick={() => onAcknowledge(selectedAlert.id, !selectedAlert.acknowledged)}>{selectedAlert.acknowledged ? 'Reopen alert' : 'Resolve alert'}</button>
+          : <button className="button button-dark" type="button" onClick={() => onOpenSection(selection.kind === 'inventory' ? 'Inventory' : 'Alerts')}>{selection.kind === 'inventory' ? 'Review inventory' : 'Open alerts'}</button>}
+          <button className="button button-outline" type="button" onClick={() => setSelection(null)}>Close details</button>
+        </footer>
+      </aside>
+    </div>}
   </div>
 }
 
 function RecoveryPlannerPanel({ shipments, suppliers, onReview }: { shipments: Shipment[]; suppliers: Supplier[]; onReview: (id: string) => void }) {
   const candidates = shipments.filter(shipmentNeedsReview).sort((a, b) => b.risk - a.risk)
   return <div className="recovery-panel">
-    <div className="recovery-note"><Sparkles size={17} /><div><strong>Review candidates from recorded supplier scores</strong><span>Suggestions do not include capacity, live transit, cost, or predicted delay reduction. Confirm details with suppliers before switching.</span></div></div>
     {!candidates.length ? <div className="empty-state"><ShieldCheck size={21} /><strong>No shipments are currently flagged</strong><span>Shipments marked At risk, Delayed, or with a score of 70+ will appear here.</span></div> : <div className="recovery-list">{candidates.map(shipment => {
       const alternative = suppliers.filter(supplier => supplier.name !== shipment.supplier).sort((a, b) => b.score - a.score)[0]
       return <article className="recovery-row" key={shipment.id}>
-        <div className="recovery-shipment"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><div><strong>{shipment.id}</strong><small>{shipment.route} · entered score {shipment.risk}/100</small></div></div>
+        <div className="recovery-shipment"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><div><strong>{shipment.id}</strong><small>{shipment.route} · predicted score {shipment.risk}/100</small></div></div>
         <div className="recovery-suggestion"><span>Recorded-score candidate</span><strong>{alternative?.name ?? 'No alternative supplier recorded'}</strong><small>{alternative ? `Reliability ${alternative.score}/100 · on time ${alternative.onTime}` : 'Add a supplier record to compare alternatives.'}</small></div>
-        <div className="recovery-action"><span>Cost / delay effect unavailable</span><button className="button button-outline button-small" onClick={() => onReview(shipment.id)}>Review shipment</button></div>
+        <div className="recovery-action"><button className="button button-outline button-small" onClick={() => onReview(shipment.id)}>Review shipment</button></div>
       </article>
     })}</div>}
   </div>
@@ -743,14 +903,13 @@ function AnalyticsPanel({ shipments, inventoryItems, suppliers, onExport }: { sh
     <div className="analytics-toolbar"><span className="tool-pill"><Activity size={14} /> CURRENT WORKSPACE RECORDS</span><button className="button button-outline button-small" onClick={onExport}><Download size={14} /> Export JSON report</button></div>
     <div className="analytics-summary-grid"><div><span>Total shipments</span><strong>{shipments.length}</strong></div><div><span>Average entered risk</span><strong>{averageRisk === null ? '—' : `${averageRisk}/100`}</strong></div><div><span>Suppliers recorded</span><strong>{suppliers.length}</strong></div><div><span>Critical inventory items</span><strong>{critical}</strong></div></div>
     <div className="analytics-chart-grid"><div className="analytics-chart-card"><div className="panel-heading"><div><h3>Shipment status mix</h3><p>Current shipment records</p></div></div><ShipmentStatusChart shipments={shipments} /></div><div className="analytics-chart-card"><div className="panel-heading"><div><h3>Supplier reliability</h3><p>Entered score, sorted high to low</p></div></div><SupplierHealthList suppliers={suppliers.slice().sort((a, b) => b.score - a.score).slice(0, 5)} /></div></div>
-    <p className="analytics-footnote">No weekly/monthly history, financial impact, or model output is available because those fields are not stored in the current dataset.</p>
   </div>
 }
 
 function AssistantPanel({ shipments, inventoryItems, suppliers, alerts }: { shipments: Shipment[]; inventoryItems: InventoryItem[]; suppliers: Supplier[]; alerts: Alert[] }) {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState<{ role: 'assistant' | 'user'; text: string }[]>([
-    { role: 'assistant', text: 'I can summarize shipments, inventory, suppliers, and alerts from this workspace. These responses use simple local rules; no AI model or external data is connected.' },
+    { role: 'assistant', text: 'I can summarize shipments, inventory, suppliers, and alerts from this workspace.' },
   ])
   function answer(question: string) {
     const text = question.toLowerCase()
@@ -785,7 +944,7 @@ function AssistantPanel({ shipments, inventoryItems, suppliers, alerts }: { ship
   </div>
 }
 
-function RecordManager({ kind, records, demoMode = false, suppliers = [], shipments = [], inventoryItems = [], returnRequests = [], searchQuery = '', onChanged, onDemoShipmentChange, onDemoInventoryChange, onAcknowledge, onNotify }: {
+function RecordManager({ kind, records, demoMode = false, suppliers = [], shipments = [], inventoryItems = [], returnRequests = [], searchQuery = '', onChanged, onDemoShipmentAdd, onDemoSupplierAdd, onDemoShipmentChange, onDemoInventoryChange, onAcknowledge, onNotify }: {
   kind: RecordKind
   records: Array<Shipment | Alert | InventoryItem | Supplier | ReturnRequest>
   demoMode?: boolean
@@ -795,9 +954,11 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
   returnRequests?: ReturnRequest[]
   searchQuery?: string
   onChanged: () => Promise<void>
+  onDemoShipmentAdd?: (shipment: Shipment) => void
+  onDemoSupplierAdd?: (supplier: Supplier) => void
   onDemoShipmentChange?: (shipment: Shipment) => void
   onDemoInventoryChange?: (item: InventoryItem) => void
-  onAcknowledge?: (id: string) => Promise<void>
+  onAcknowledge?: (id: string, acknowledged: boolean) => Promise<void>
   onNotify?: (message: string) => void
 }) {
   const definition = recordDefinitions[kind]
@@ -807,24 +968,34 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
     : []
   const linkedShipments = shipments
   const displayedRecords = managedRecords.filter(record =>
-    !searchQuery || kind !== 'shipments' || Object.values(record).some(value => String(value ?? '').toLowerCase().includes(searchQuery.toLowerCase())))
+    !searchQuery || Object.values(record).some(value => {
+      const searchableValue = Array.isArray(value) ? value.join(' ') : String(value ?? '')
+      return searchableValue.toLowerCase().includes(searchQuery.toLowerCase())
+    }))
   const [editing, setEditing] = useState<ManagedRecord | null | undefined>(undefined)
   const [alternativeFor, setAlternativeFor] = useState<Shipment | null>(null)
   const [inventoryAlternativeFor, setInventoryAlternativeFor] = useState<InventoryItem | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
+  const [minEtaDate, setMinEtaDate] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [switchBusy, setSwitchBusy] = useState(false)
   const [switchError, setSwitchError] = useState('')
+  const [selectedBenefit, setSelectedBenefit] = useState<NonNullable<Shipment['retentionBenefit']> | ''>('')
+  const [refundAmountInr, setRefundAmountInr] = useState('')
+  const formFields = definition.fields.filter(field =>
+    !(kind === 'shipments' && !editing && (field.name === 'status' || field.name === 'risk')))
   const alternatives = suppliers
     .filter(supplier => supplier.name !== alternativeFor?.supplier)
     .sort((first, second) => second.score - first.score || Number.parseFloat(second.onTime) - Number.parseFloat(first.onTime))
+  const parsedRefundAmountInr = Number(refundAmountInr)
+  const hasValidRefundAmount = refundAmountInr.trim() !== '' && Number.isFinite(parsedRefundAmountInr) && parsedRefundAmountInr > 0
   const inventoryAlternatives = suppliers
     .filter(supplier => !inventoryAlternativeFor?.suppliers.includes(supplier.name))
     .sort((first, second) => second.score - first.score || Number.parseFloat(second.onTime) - Number.parseFloat(first.onTime))
 
   async function switchSupplier(supplier: Supplier) {
-    if (!alternativeFor) return
+    if (!alternativeFor || !hasValidRefundAmount) return
     setSwitchBusy(true)
     setSwitchError('')
     try {
@@ -834,20 +1005,48 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
           supplier: supplier.name,
           initials: supplier.initials,
           tone: supplier.tone,
+          refundRequired: true,
+          refundAmountInr: parsedRefundAmountInr,
+          retentionBenefit: null,
         })
       } else {
         await apiRequest(`${definition.endpoint}/${encodeURIComponent(alternativeFor.id)}`, {
           method: 'PATCH',
-          body: JSON.stringify({ supplier: supplier.name, initials: supplier.initials, tone: supplier.tone }),
+          body: JSON.stringify({ supplier: supplier.name, initials: supplier.initials, tone: supplier.tone, refundRequired: true, refundAmountInr: parsedRefundAmountInr, retentionBenefit: null }),
         })
         await onChanged()
       }
       setAlternativeFor(null)
       onNotify?.(demoMode
-        ? `Demo preview: supplier for ${alternativeFor.id} changed to ${supplier.name}. This was not saved.`
-        : `Supplier for ${alternativeFor.id} changed to ${supplier.name}.`)
+        ? `Demo preview: ${alternativeFor.id} changed to ${supplier.name}; a buyer refund is marked due. This was not saved or paid.`
+        : `Supplier for ${alternativeFor.id} changed to ${supplier.name}; a buyer refund is marked due for processing.`)
     } catch (switchError) {
       setSwitchError(switchError instanceof Error ? switchError.message : 'Could not change the shipment supplier.')
+    } finally {
+      setSwitchBusy(false)
+    }
+  }
+
+  async function keepSupplierWithBenefit() {
+    if (!alternativeFor || !selectedBenefit) return
+    setSwitchBusy(true)
+    setSwitchError('')
+    try {
+      if (demoMode) {
+        onDemoShipmentChange?.({ ...alternativeFor, refundRequired: false, refundAmountInr: null, retentionBenefit: selectedBenefit })
+      } else {
+        await apiRequest(`${definition.endpoint}/${encodeURIComponent(alternativeFor.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ refundRequired: false, refundAmountInr: null, retentionBenefit: selectedBenefit }),
+        })
+        await onChanged()
+      }
+      setAlternativeFor(null)
+      onNotify?.(demoMode
+        ? `Demo preview: ${selectedBenefit} selected for ${alternativeFor.id}. This was not saved or fulfilled.`
+        : `${selectedBenefit} selected for ${alternativeFor.id}; fulfilment is still required.`)
+    } catch (benefitError) {
+      setSwitchError(benefitError instanceof Error ? benefitError.message : 'Could not save the selected benefit.')
     } finally {
       setSwitchBusy(false)
     }
@@ -897,6 +1096,7 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
           : value
     }
     setValues(formValues)
+    setMinEtaDate(kind === 'shipments' && !record ? nextLocalDateInputValue() : '')
     setEditing(record ?? null)
     setError('')
   }
@@ -905,7 +1105,7 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
     event.preventDefault()
     setBusy(true)
     setError('')
-    const payload = Object.fromEntries(definition.fields
+    const recordPayload = Object.fromEntries(definition.fields
       .filter(field => !(editing && (field.name === 'id')))
       .map(field => {
         const value = values[field.name] ?? ''
@@ -915,7 +1115,49 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
         if (field.type === 'multiselect') return [field.name, selectedValues(value)]
         return [field.name, value]
       }))
+    const payload = kind === 'shipments' && !editing
+      ? {
+        ...recordPayload,
+        status: 'On track',
+        risk: 0,
+        tone: suppliers.find(supplier => supplier.name === values.supplier)?.tone ?? 'blue',
+      }
+      : recordPayload
     try {
+      if (demoMode && kind === 'shipments' && !editing) {
+        onDemoShipmentAdd?.({
+          id: String(payload.id ?? ''),
+          supplier: String(payload.supplier ?? ''),
+          route: String(payload.route ?? ''),
+          carrier: String(payload.carrier ?? ''),
+          eta: String(payload.eta ?? ''),
+          status: 'On track',
+          risk: 0,
+          initials: String(payload.initials ?? ''),
+          tone: String(payload.tone ?? 'blue'),
+        })
+        setEditing(undefined)
+        onNotify?.('Demo shipment added for this session. It is not saved.')
+        return
+      }
+      if (demoMode && kind === 'suppliers' && !editing) {
+        const name = String(payload.name ?? '').trim()
+        const initials = name.split(/\s+/).slice(0, 2).map(part => part[0] ?? '').join('').toUpperCase()
+        const tones = ['violet', 'blue', 'teal', 'orange']
+        onDemoSupplierAdd?.({
+          id: `demo-supplier-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          orders: Number(payload.completedOrders),
+          onTime: `${Number(payload.onTimeRate).toFixed(1)}%`,
+          fulfillment: `${Number(payload.fulfillmentRate).toFixed(1)}%`,
+          score: Number(payload.reliabilityScore),
+          tone: tones[name.length % tones.length],
+          initials,
+        })
+        setEditing(undefined)
+        onNotify?.('Demo supplier added for this session. It is not saved.')
+        return
+      }
       const url = editing
         ? `${definition.endpoint}/${encodeURIComponent(editing.id)}`
         : definition.endpoint
@@ -942,19 +1184,15 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
   return <div className="record-manager">
     <div className="record-toolbar">
       <span>{demoMode ? `${displayedRecords.length} sample ${recordLabels[kind]}${records.length === 1 ? '' : 's'}` : `${displayedRecords.length} of ${records.length} saved record${records.length === 1 ? '' : 's'}`}</span>
-      <button className="button button-dark button-small" disabled={demoMode} title={demoMode ? 'Connect MongoDB to add saved records.' : undefined} onClick={() => openForm()}><Plus size={15} /> Add {recordLabels[kind]}</button>
+      <button className="button button-dark button-small" disabled={demoMode && kind !== 'shipments' && kind !== 'suppliers'} title={demoMode && (kind === 'shipments' || kind === 'suppliers') ? `Demo ${recordLabels[kind]} will be temporary for this session.` : demoMode ? 'Connect MongoDB to add saved records.' : undefined} onClick={() => openForm()}><Plus size={15} /> Add {recordLabels[kind]}</button>
     </div>
     {kind === 'returns' && (!suppliers.length || !inventoryItems.length) && <p className="record-prerequisite-note">Add at least one supplier and one inventory item before recording returns.</p>}
     {error && !editing && <p className="form-error" role="alert">{error}</p>}
     {displayedRecords.length === 0 ? <div className="empty-state"><Search size={21} /><strong>{records.length === 0 ? `No ${recordLabels[kind]} records yet` : 'No matching shipments'}</strong><span>{records.length === 0 ? 'Add a record to get started.' : 'Clear the search field to see all shipments.'}</span></div> :
       <div className="table-scroll"><table className="shipment-table module-table">
-        <thead><tr>{definition.fields.map(field => <th key={field.name}>{field.name === 'suppliers' && kind === 'inventory' ? 'ASSIGNED SUPPLIERS' : field.label.toUpperCase()}</th>)}{kind === 'inventory' && <th>SUPPLIERS AT RISK</th>}{kind === 'returns' && <th>RATING</th>}{kind === 'suppliers' && <th>RETURN PERFORMANCE</th>}<th>ACTIONS</th></tr></thead>
+        <thead><tr>{definition.fields.map(field => <th key={field.name}>{field.name === 'suppliers' && kind === 'inventory' ? 'ASSIGNED SUPPLIERS' : field.label.toUpperCase()}</th>)}{kind === 'inventory' && <th>SUPPLIERS AT RISK</th>}{kind === 'returns' && <th>RATING</th>}{kind === 'suppliers' && <th>RETURN PERFORMANCE</th>}{kind !== 'inventory' && kind !== 'returns' && <th>{kind === 'shipments' ? 'NEXT STEP' : 'ACTIONS'}</th>}</tr></thead>
         <tbody>{displayedRecords.map(record => <tr key={record.id}>
-          {definition.fields.map(field => <td key={field.name}>{field.name === 'suppliers' && kind === 'inventory'
-            ? (Array.isArray(record.suppliers) && record.suppliers.length ? record.suppliers.join(', ') : '—')
-            : field.type === 'date'
-              ? kind === 'returns' && field.name === 'completedAt' && !record[field.name] ? 'Pending' : formatRecordDate(record[field.name])
-              : String(record[field.name] ?? (kind === 'returns' && field.name === 'completedAt' ? 'Pending' : '—'))}</td>)}
+          {definition.fields.map(field => <td key={field.name}>{managedFieldValue(record, field, kind)}</td>)}
           {kind === 'inventory' && <td className="inventory-risk-suppliers">
             {(() => {
               const assigned = Array.isArray(record.suppliers)
@@ -978,34 +1216,48 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
           {kind === 'returns' && <td><span className={`return-rating return-rating-${String(record.rating).toLowerCase()}`}>{String(record.rating || 'Pending')}</span></td>}
           {kind === 'suppliers' && <td className="return-performance-cell">
             {(() => {
-              const supplierReturns = returnRequests.filter(item => item.supplier === record.name && item.rating !== 'Pending')
-              const onTime = supplierReturns.filter(item => item.rating === 'Best' || item.rating === 'Good').length
-              const best = supplierReturns.filter(item => item.rating === 'Best').length
-              const good = supplierReturns.filter(item => item.rating === 'Good').length
-              const poor = supplierReturns.filter(item => item.rating === 'Poor').length
-              return supplierReturns.length
-                ? <><strong>{Math.round(onTime / supplierReturns.length * 100)}% on time</strong><small>{best} Best · {good} Good · {poor} Poor</small></>
+              const performance = supplierReturnPerformance(String(record.name ?? ''), returnRequests)
+              return performance
+                ? <><strong>{performance.percent}% on time</strong><small>{performance.best} Best · {performance.good} Good · {performance.poor} Poor</small></>
                 : <span className="inventory-supplier-clear">No return history</span>
             })()}
           </td>}
-          <td className="record-actions">
-            {kind === 'shipments' && shipmentRecords.some(shipment => shipment.id === record.id && shipmentNeedsReview(shipment)) && <button className="button button-outline button-small" type="button" onClick={() => {
+          {kind !== 'inventory' && kind !== 'returns' && <td className="record-actions">
+            {kind === 'shipments' ? (() => {
               const shipment = shipmentRecords.find(item => item.id === record.id)
-              if (shipment) {
-                setAlternativeFor(shipment)
-                setSwitchError('')
-              }
-            }}>Find alternative</button>}
-            {kind === 'alerts' && record.acknowledged !== true && onAcknowledge && <button className="button button-outline button-small" disabled={demoMode} onClick={() => void onAcknowledge(record.id)}>Acknowledge</button>}
-            <button className="button button-outline button-small" disabled={demoMode} onClick={() => openForm(record)}>Edit</button>
-            <button className="button button-outline button-small" disabled={demoMode} onClick={() => void remove(record)}>Delete</button>
-          </td>
+              if (!shipment) return <span className="shipment-action-status">No action needed</span>
+              return <>
+                {shipmentNeedsReview(shipment) && <button className="button button-outline button-small" type="button" onClick={() => {
+                  setAlternativeFor(shipment)
+                  setSelectedBenefit(shipment.retentionBenefit ?? '')
+                  setRefundAmountInr(shipment.refundAmountInr == null ? '' : String(shipment.refundAmountInr))
+                  setSwitchError('')
+                }}>Find alternative</button>}
+                {shipment.refundRequired
+                  ? <span className="shipment-action-status shipment-refund-status">Buyer refund due{shipment.refundAmountInr != null ? ` · ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(shipment.refundAmountInr)}` : ' · amount missing'}</span>
+                  : shipment.retentionBenefit
+                    ? <span className="shipment-action-status shipment-benefit-status">Benefit: {shipment.retentionBenefit}</span>
+                    : !shipmentNeedsReview(shipment) && <span className="shipment-action-status">No action needed</span>}
+              </>
+            })() : kind === 'suppliers' ? (() => {
+              const performance = supplierReturnPerformance(String(record.name ?? ''), returnRequests)
+              if (!performance) return <span className="supplier-action-status">No completed returns to assess</span>
+              if (performance.percent < 40) return <div className="supplier-action-warning" role="status">
+                <strong>Issue with this supplier · {performance.percent}% return score</strong>
+                <span>Returns are not being completed properly in Supplier Network: only {performance.onTime} of {performance.total} completed returns met the target. Please investigate and take relevant action.</span>
+              </div>
+              return <span className="supplier-action-status">No action needed</span>
+            })() : kind === 'alerts' ? onAcknowledge && <button className="button button-outline button-small" onClick={() => void onAcknowledge(record.id, record.acknowledged !== true)}>{record.acknowledged === true ? 'Reopen' : 'Resolve'}</button> : <>
+              <button className="button button-outline button-small" disabled={demoMode} onClick={() => openForm(record)}>Edit</button>
+              <button className="button button-outline button-small" disabled={demoMode} onClick={() => void remove(record)}>Delete</button>
+            </>}
+          </td>}
         </tr>)}</tbody>
       </table></div>}
     {editing !== undefined && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(undefined) }}>
       <form className="record-form" onSubmit={event => void save(event)}>
-        <div className="panel-heading"><div><h2>{editing ? 'Edit' : 'Add'} {recordLabels[kind]}</h2><p>Saved securely to the connected database.</p></div><button className="icon-btn" type="button" aria-label="Close form" onClick={() => setEditing(undefined)}><X size={17} /></button></div>
-        {definition.fields.map(field => <label className="record-field" key={field.name}>{field.label}
+        <div className="panel-heading"><div><h2>{editing ? 'Edit' : 'Add'} {recordLabels[kind]}</h2><p>{demoMode && !editing && (kind === 'shipments' || kind === 'suppliers') ? `This demo ${recordLabels[kind]} is temporary for the current session.` : 'Saved securely to the connected database.'}</p></div><button className="icon-btn" type="button" aria-label="Close form" onClick={() => setEditing(undefined)}><X size={17} /></button></div>
+        {formFields.map(field => <label className="record-field" key={field.name}>{field.label}
           {field.type === 'multiselect'
             ? <select className="text-field multi-select-field" multiple value={selectedValues(values[field.name] ?? '')} disabled={!suppliers.length} onChange={event => {
               const selected = Array.from(event.currentTarget.selectedOptions, option => option.value)
@@ -1024,7 +1276,8 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
             ? <select className="text-field" required value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))}>
               <option value="" disabled>Select…</option>{field.options?.map(option => <option key={option}>{option}</option>)}
             </select>
-            : <input className="text-field" type={field.type || 'text'} required={field.type !== 'date' || field.name !== 'completedAt'} min={field.min} max={field.max} step={field.type === 'number' ? '1' : undefined} disabled={Boolean(editing) && field.name === 'id'} value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))} />}
+            : <input className="text-field" type={field.type || 'text'} required={field.type !== 'date' || field.name !== 'completedAt'} min={kind === 'shipments' && field.name === 'eta' && field.type === 'date' && !editing ? minEtaDate : field.min} max={field.max} step={field.type === 'number' ? '1' : undefined} disabled={Boolean(editing) && field.name === 'id'} value={values[field.name] ?? ''} onChange={event => setValues(current => ({ ...current, [field.name]: event.target.value }))} />}
+          {kind === 'shipments' && field.name === 'eta' && field.type === 'date' && !editing && <small className="record-field-help">Choose a date after today.</small>}
           {field.type === 'multiselect' && <small className="record-field-help">{suppliers.length ? 'Hold Ctrl (Windows) or Command (Mac) to select multiple suppliers.' : 'Add supplier records before assigning suppliers to inventory.'}</small>}
         </label>)}
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -1038,15 +1291,33 @@ function RecordManager({ kind, records, demoMode = false, suppliers = [], shipme
           <button className="icon-btn" type="button" aria-label="Close alternatives" disabled={switchBusy} onClick={() => setAlternativeFor(null)}><X size={17} /></button>
         </div>
         <p className="supplier-switch-note">{demoMode
-          ? 'Preview only: these synthetic supplier records are for demonstration. A switch updates this page temporarily and is not saved.'
+          ? 'Preview only: these synthetic supplier records are for demonstration. A switch or benefit choice updates this page temporarily and is not saved.'
           : 'Options use only supplier records already entered in this workspace. Confirm capacity and emergency delivery with the supplier before switching.'}</p>
+        <section className="refund-choice" aria-labelledby="refund-choice-title">
+          <h3 id="refund-choice-title">Change supplier and refund the buyer</h3>
+          <p>Enter the buyer’s paid amount in rupees. Switching marks that amount as due for refund; you will still need to process the payment separately.</p>
+          <label className="refund-amount-field" htmlFor="refund-amount-inr">Refund amount (INR / ₹)
+            <span className="refund-input-wrap"><span aria-hidden="true">₹</span><input id="refund-amount-inr" className="text-field" type="number" inputMode="decimal" min="0.01" step="0.01" required value={refundAmountInr} disabled={switchBusy} onChange={event => setRefundAmountInr(event.target.value)} placeholder="0.00" /></span>
+          </label>
+        </section>
         {switchError && <p className="form-error" role="alert">{switchError}</p>}
         {alternatives.length ? <div className="alternative-list">{alternatives.map(supplier => <article className="alternative-card" key={supplier.id}>
           <div className={`supplier-avatar avatar-${supplier.tone}`}>{supplier.initials}</div>
           <div className="alternative-details"><strong>{supplier.name}</strong><span>Reliability {supplier.score}/100 · On time {supplier.onTime} · Fulfillment {supplier.fulfillment}</span><small>{supplier.orders} completed orders recorded</small></div>
-          <button className="button button-dark button-small" type="button" disabled={switchBusy} onClick={() => void switchSupplier(supplier)}>{switchBusy ? 'Updating…' : 'Switch supplier'}</button>
+          <button className="button button-dark button-small" type="button" disabled={switchBusy || !hasValidRefundAmount} onClick={() => void switchSupplier(supplier)}>{switchBusy ? 'Updating…' : 'Switch + refund due'}</button>
         </article>)}</div> : <div className="empty-state"><Users size={21} /><strong>No alternative suppliers available</strong><span>Add another supplier in the Suppliers section to compare workspace records.</span></div>}
-        <p className="supplier-switch-footnote">Switching updates the supplier name and display initials/avatar only. The ETA and risk score are unchanged.</p>
+        <section className="retention-choice" aria-labelledby="retention-choice-title">
+          <h3 id="retention-choice-title">Keep the current supplier and choose a benefit</h3>
+          <p>Choose one option for the buyer. Selecting it records the choice; it does not issue cashback, coins, or a gift.</p>
+          <div className="benefit-options" role="radiogroup" aria-labelledby="retention-choice-title">
+            {(['Super coins', '20% cashback', 'Surprise gift'] as const).map(benefit => <label className={`benefit-option${selectedBenefit === benefit ? ' benefit-option-selected' : ''}`} key={benefit}>
+              <input type="radio" name={`benefit-${alternativeFor.id}`} value={benefit} checked={selectedBenefit === benefit} disabled={switchBusy} onChange={() => setSelectedBenefit(benefit)} />
+              <span>{benefit}</span>
+            </label>)}
+          </div>
+          <button className="button button-outline button-small" type="button" disabled={switchBusy || !selectedBenefit} onClick={() => void keepSupplierWithBenefit()}>{switchBusy ? 'Saving…' : 'Keep supplier + save benefit'}</button>
+        </section>
+        <p className="supplier-switch-footnote">Switching updates the supplier name and display initials/avatar; ETA and risk stay unchanged. A refund or benefit needs separate payment/reward fulfilment.</p>
       </section>
     </div>}
     {inventoryAlternativeFor && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !switchBusy) setInventoryAlternativeFor(null) }}>
@@ -1082,9 +1353,8 @@ function WhatIfPanel({ items }: { items: InventoryItem[] }) {
     <div className="scenario-controls"><div className="field-label">Scenario type</div><select className="text-field" defaultValue="Delivery delay"><option>Delivery delay</option><option>Demand increase</option><option>Supplier disruption</option></select>
       <label className="field-label" htmlFor="delay-days">Shipment delay (days)</label><input id="delay-days" className="text-field" type="number" min="0" max="90" value={delay} onChange={event => setDelay(Math.max(0, Number(event.target.value)))} />
       <label className="field-label" htmlFor="demand-percent">Demand increase (%)</label><input id="demand-percent" className="text-field" type="number" min="0" max="300" value={demandIncrease} onChange={event => setDemandIncrease(Math.max(0, Number(event.target.value)))} />
-      <p className="privacy-note"><ShieldCheck size={15} /> Simulation only. Live records and alerts are not changed.</p>
     </div>
-    <div className="scenario-results"><span className="tool-pill"><Activity size={14} /> SIMULATED OUTCOME</span><h3>{selectedItem ? `${selectedItem.detail} · ${selectedItem.item}` : 'No inventory records'}</h3><p>Scenario arithmetic based on the first inventory record currently in MongoDB.</p><div className="scenario-metrics"><div><span>Current coverage</span><strong>{currentCover === null ? 'Not calculable' : `${currentCover} days`}</strong></div><ArrowRight size={17} /><div className="scenario-impact"><span>Projected coverage</span><strong>{projectedCover === null ? '—' : `${projectedCover} days`}</strong></div></div><div className="scenario-warning"><span className="status-dot" />{projectedCover === null ? 'Add an inventory item with positive daily demand to run this scenario.' : projectedCover <= 3 ? 'Potential stockout before replenishment. Review source records.' : 'Coverage remains above the illustrative 3-day threshold.'}</div><small>Illustrative arithmetic only · No predictive model used</small></div>
+    <div className="scenario-results"><span className="tool-pill"><Activity size={14} /> SIMULATED OUTCOME</span><h3>{selectedItem ? `${selectedItem.detail} · ${selectedItem.item}` : 'No inventory records'}</h3><p>Scenario arithmetic based on the first inventory record currently in MongoDB.</p><div className="scenario-metrics"><div><span>Current coverage</span><strong>{currentCover === null ? 'Not calculable' : `${currentCover} days`}</strong></div><ArrowRight size={17} /><div className="scenario-impact"><span>Projected coverage</span><strong>{projectedCover === null ? '—' : `${projectedCover} days`}</strong></div></div><div className="scenario-warning"><span className="status-dot" />{projectedCover === null ? 'Add an inventory item with positive daily demand to run this scenario.' : projectedCover <= 3 ? 'Potential stockout before replenishment. Review source records.' : 'Coverage remains above the illustrative 3-day threshold.'}</div></div>
   </div>
 }
 

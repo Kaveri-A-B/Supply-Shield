@@ -27,6 +27,9 @@ function serializeShipment(document) {
     risk: document.risk,
     initials: document.initials,
     tone: document.tone,
+    refundRequired: document.refundRequired ?? false,
+    refundAmountInr: document.refundAmountInr ?? null,
+    retentionBenefit: document.retentionBenefit ?? null,
   }
 }
 
@@ -158,9 +161,13 @@ app.get('/api/shipments', async (_request, response, next) => {
 })
 
 app.post('/api/shipments', async (request, response, next) => {
-  const fields = ['id', 'supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone']
-  const issue = validateFields(request.body, fields, fields)
+  const fields = ['id', 'supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone', 'refundRequired', 'refundAmountInr', 'retentionBenefit']
+  const requiredFields = ['id', 'supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone']
+  const issue = validateFields(request.body, fields, requiredFields)
   if (issue) return response.status(400).json({ error: issue })
+  if (request.body.refundRequired === true && (!Number.isFinite(request.body.refundAmountInr) || request.body.refundAmountInr <= 0)) {
+    return response.status(400).json({ error: 'Enter a positive refund amount in INR before marking a refund due.' })
+  }
   try {
     const document = await Shipment.create(request.body)
     response.status(201).json(serializeShipment(document))
@@ -170,9 +177,12 @@ app.post('/api/shipments', async (request, response, next) => {
 })
 
 app.patch('/api/shipments/:id', async (request, response, next) => {
-  const fields = ['supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone']
+  const fields = ['supplier', 'route', 'carrier', 'eta', 'status', 'risk', 'initials', 'tone', 'refundRequired', 'refundAmountInr', 'retentionBenefit']
   const issue = validateFields(request.body, fields)
   if (issue) return response.status(400).json({ error: issue })
+  if (request.body.refundRequired === true && (!Number.isFinite(request.body.refundAmountInr) || request.body.refundAmountInr <= 0)) {
+    return response.status(400).json({ error: 'Enter a positive refund amount in INR before switching suppliers.' })
+  }
   try {
     const document = await Shipment.findOneAndUpdate({ id: request.params.id }, request.body, { new: true, runValidators: true })
     if (!document) return response.status(404).json({ error: 'Shipment not found.' })
@@ -394,8 +404,15 @@ app.patch('/api/alerts/:id', async (request, response, next) => {
 })
 
 app.patch('/api/alerts/:id/acknowledge', async (request, response, next) => {
+  const body = request.body ?? {}
+  const issue = validateFields(body, ['acknowledged'])
+  if (issue) return response.status(400).json({ error: issue })
+  if (body.acknowledged !== undefined && typeof body.acknowledged !== 'boolean') {
+    return response.status(400).json({ error: 'Acknowledged must be a boolean.' })
+  }
+  const acknowledged = body.acknowledged ?? true
   try {
-    const document = await Alert.findOneAndUpdate({ id: request.params.id }, { acknowledged: true }, { new: true })
+    const document = await Alert.findOneAndUpdate({ id: request.params.id }, { acknowledged }, { new: true, runValidators: true })
     if (!document) return response.status(404).json({ error: 'Alert not found.' })
     response.json(serializeAlert(document))
   } catch (error) {
