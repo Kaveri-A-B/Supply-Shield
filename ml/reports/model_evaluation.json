@@ -1,0 +1,276 @@
+{
+  "model_version": "olist-late-delivery-educational-v1",
+  "target": "late_delivery = actual customer delivery timestamp > estimated delivery timestamp",
+  "prediction_time_assumption": "Order purchase/placement; estimated delivery date and order-level item/catalog/geographic features assumed known then.",
+  "license": "CC BY-NC-SA 4.0; non-commercial educational use only",
+  "exclusions": {
+    "all_order_rows": 99441,
+    "not_delivered_status": 2963,
+    "delivered_missing_order_id": 0,
+    "delivered_missing_actual_delivery_timestamp": 8,
+    "delivered_missing_estimated_delivery_timestamp": 0,
+    "eligible_but_missing_purchase_timestamp": 0,
+    "eligible_training_orders": 96470
+  },
+  "split": {
+    "train": {
+      "rows": 67529,
+      "late_count": 6096,
+      "late_rate": 0.09027232744450532,
+      "purchase_start": "2016-09-15T12:16:38+00:00",
+      "purchase_end": "2018-04-15T20:12:35+00:00"
+    },
+    "validation": {
+      "rows": 14470,
+      "late_count": 773,
+      "late_rate": 0.053420870767104355,
+      "purchase_start": "2018-04-15T20:17:11+00:00",
+      "purchase_end": "2018-06-21T08:29:29+00:00"
+    },
+    "test": {
+      "rows": 14471,
+      "late_count": 957,
+      "late_rate": 0.06613226452905811,
+      "purchase_start": "2018-06-21T08:41:07+00:00",
+      "purchase_end": "2018-08-29T15:00:37+00:00"
+    },
+    "split_rule": "Chronological order-level rows sorted by purchase timestamp then order_id; first 70% train, next 15% validation, final 15% test. Each order_id occurs once and belongs to one split."
+  },
+  "random_seed": 42,
+  "selected_model": "Logistic Regression",
+  "selected_threshold": 0.5048629033381414,
+  "validation_metrics": {
+    "Majority Dummy Baseline": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "threshold": 0.5
+    },
+    "Logistic Regression": {
+      "precision": 0.1695906432748538,
+      "recall": 0.3001293661060802,
+      "f1": 0.21672115833722558,
+      "threshold": 0.5048629033381414
+    },
+    "Shallow Decision Tree": {
+      "precision": 0.07247982275676532,
+      "recall": 0.592496765847348,
+      "f1": 0.12915961646926116,
+      "threshold": 0.4509271778108032
+    },
+    "Random Forest": {
+      "precision": 0.1040281579976535,
+      "recall": 0.34411384217335056,
+      "f1": 0.15975975975975978,
+      "threshold": 0.3997802172516506
+    }
+  },
+  "test_metrics": {
+    "Majority Dummy Baseline": {
+      "threshold": 0.5,
+      "accuracy": 0.9338677354709419,
+      "precision_late_class": 0.0,
+      "recall_late_class": 0.0,
+      "f1_late_class": 0.0,
+      "average_precision_pr_auc": 0.06613226452905811,
+      "roc_auc": 0.5,
+      "brier_score_uncalibrated": 0.06613226452905811,
+      "confusion_matrix_labels_0_1": {
+        "true_negative": 13514,
+        "false_positive": 0,
+        "false_negative": 957,
+        "true_positive": 0
+      }
+    },
+    "Logistic Regression": {
+      "threshold": 0.5048629033381414,
+      "accuracy": 0.8641420772579642,
+      "precision_late_class": 0.11924528301886793,
+      "recall_late_class": 0.16509926854754442,
+      "f1_late_class": 0.13847502191060473,
+      "average_precision_pr_auc": 0.120051406509709,
+      "roc_auc": 0.6687524327494115,
+      "brier_score_uncalibrated": 0.12365650154542515,
+      "confusion_matrix_labels_0_1": {
+        "true_negative": 12347,
+        "false_positive": 1167,
+        "false_negative": 799,
+        "true_positive": 158
+      }
+    },
+    "Shallow Decision Tree": {
+      "threshold": 0.4509271778108032,
+      "accuracy": 0.5474397070002073,
+      "precision_late_class": 0.045661358466038346,
+      "recall_late_class": 0.2936259143155695,
+      "f1_late_class": 0.07903248488257629,
+      "average_precision_pr_auc": 0.06636995804581694,
+      "roc_auc": 0.47686465941353595,
+      "brier_score_uncalibrated": 0.15434263361773962,
+      "confusion_matrix_labels_0_1": {
+        "true_negative": 7641,
+        "false_positive": 5873,
+        "false_negative": 676,
+        "true_positive": 281
+      }
+    },
+    "Random Forest": {
+      "threshold": 0.3997802172516506,
+      "accuracy": 0.8378135581507843,
+      "precision_late_class": 0.0617906683480454,
+      "recall_late_class": 0.10240334378265413,
+      "f1_late_class": 0.07707432166732206,
+      "average_precision_pr_auc": 0.07035500544920709,
+      "roc_auc": 0.5430859734608593,
+      "brier_score_uncalibrated": 0.12986171912464958,
+      "confusion_matrix_labels_0_1": {
+        "true_negative": 12026,
+        "false_positive": 1488,
+        "false_negative": 859,
+        "true_positive": 98
+      }
+    }
+  },
+  "feature_allow_list": [
+    "purchase_month",
+    "purchase_day_of_week",
+    "purchase_hour",
+    "customer_state",
+    "main_seller_state",
+    "main_product_category",
+    "promised_lead_days",
+    "item_count",
+    "seller_count",
+    "item_price_total",
+    "freight_total",
+    "mean_product_weight_g",
+    "mean_product_length_cm",
+    "mean_product_height_cm",
+    "mean_product_width_cm"
+  ],
+  "categorical_features": [
+    "purchase_month",
+    "purchase_day_of_week",
+    "purchase_hour",
+    "customer_state",
+    "main_seller_state",
+    "main_product_category"
+  ],
+  "numeric_features": [
+    "promised_lead_days",
+    "item_count",
+    "seller_count",
+    "item_price_total",
+    "freight_total",
+    "mean_product_weight_g",
+    "mean_product_length_cm",
+    "mean_product_height_cm",
+    "mean_product_width_cm"
+  ],
+  "excluded_from_predictors": [
+    "order_id and customer_id (join/split bookkeeping only)",
+    "order_status (eligibility filter only)",
+    "order_delivered_customer_date (target only)",
+    "order_estimated_delivery_date (target source; only promised_lead_days derived feature used under stated availability assumption)",
+    "order_delivered_carrier_date, review fields, payment fields, shipping_limit_date",
+    "product_id and seller_id (aggregation/join only)"
+  ],
+  "top_transformed_feature_importance": {
+    "method": "Absolute Logistic Regression coefficient; numeric inputs are standardized.",
+    "values": [
+      {
+        "feature": "categorical__main_seller_state_MA",
+        "importance": 1.623607144897526
+      },
+      {
+        "feature": "categorical__customer_state_AL",
+        "importance": 1.5133591511532192
+      },
+      {
+        "feature": "categorical__customer_state_SP",
+        "importance": 1.4367750987185606
+      },
+      {
+        "feature": "categorical__customer_state_RR",
+        "importance": 1.4008777565170316
+      },
+      {
+        "feature": "categorical__customer_state_PR",
+        "importance": 1.1866327339343121
+      },
+      {
+        "feature": "categorical__main_product_category_art",
+        "importance": 1.1394883949373649
+      },
+      {
+        "feature": "categorical__customer_state_MG",
+        "importance": 1.0976832229122173
+      },
+      {
+        "feature": "categorical__main_product_category_dvds_blu_ray",
+        "importance": 1.0418406068446469
+      },
+      {
+        "feature": "categorical__purchase_month_3",
+        "importance": 1.0249883672543798
+      },
+      {
+        "feature": "categorical__main_product_category_construction_tools_safety",
+        "importance": 0.9667667714405259
+      },
+      {
+        "feature": "categorical__main_product_category_agro_industry_and_commerce",
+        "importance": 0.9489792120594264
+      },
+      {
+        "feature": "categorical__purchase_month_2",
+        "importance": 0.8783875006639325
+      },
+      {
+        "feature": "categorical__main_seller_state_MT",
+        "importance": 0.797421992559996
+      },
+      {
+        "feature": "categorical__main_product_category_home_comfort_2",
+        "importance": 0.7834561659126157
+      },
+      {
+        "feature": "categorical__purchase_month_7",
+        "importance": 0.779639832582384
+      },
+      {
+        "feature": "categorical__purchase_month_8",
+        "importance": 0.7787044702692326
+      },
+      {
+        "feature": "categorical__customer_state_DF",
+        "importance": 0.776109028791626
+      },
+      {
+        "feature": "categorical__purchase_month_11",
+        "importance": 0.7700965266325828
+      },
+      {
+        "feature": "categorical__customer_state_RO",
+        "importance": 0.7558177706916708
+      },
+      {
+        "feature": "categorical__main_seller_state_PE",
+        "importance": 0.6896660786264682
+      }
+    ]
+  },
+  "dataset_sha256": "967e41e04fc306fe604e2a693f488995a8b41e5047418f8a5c8e4abd6deca784",
+  "artifact_file": "olist-late-delivery-educational-v1.joblib",
+  "artifact_sha256": "16e4b39b546cd62385d38ab0237953095a5a63db9f15d69fc33153cbba85428d",
+  "environment": {
+    "python": "3.15.0",
+    "pandas": "3.1.0",
+    "scikit_learn": "1.9.1",
+    "numpy": "2.5.4",
+    "joblib": "1.6.0",
+    "trained_at_utc": "2026-10-30T14:39:03.366088+00:00"
+  },
+  "probability_caveat": "Raw model scores are not calibrated probabilities; class weighting may affect probability interpretation.",
+  "integration_status": "Local benchmark artifact only; no application or SAP integration."
+}

@@ -1,0 +1,1 @@
+shipment_id,event_id,event_type,event_time_utc,recorded_at_utc,eta_at_event_utc,actual_delivery_at_utc,status_code,exclusion_reason,source_system

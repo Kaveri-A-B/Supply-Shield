@@ -1,0 +1,777 @@
+{
+  "scope": "Selected saved model; untouched chronological test partition; no retraining or threshold change.",
+  "model_version": "olist-late-delivery-educational-v1",
+  "selected_model": "Logistic Regression",
+  "threshold": 0.5048629033381414,
+  "test_orders": 14471,
+  "actual_late_orders": 957,
+  "confusion_matrix": {
+    "true_negative": 12347,
+    "false_positive": 1167,
+    "false_negative": 799,
+    "true_positive": 158
+  },
+  "miss_rate": 0.8349007314524556,
+  "false_alert_rate": 0.08635489122391594,
+  "false_discovery_rate": 0.8807547169811321,
+  "minimum_subgroup_size": 100,
+  "monthly_errors": [
+    {
+      "value": "2018-06",
+      "orders": 1964,
+      "actual_late_orders": 21,
+      "missed_late_orders": 17,
+      "miss_rate_among_late": 0.8095238095238095,
+      "actual_on_time_orders": 1943,
+      "false_alert_orders": 76,
+      "false_alert_rate_among_on_time": 0.0391147709727226
+    },
+    {
+      "value": "2018-07",
+      "orders": 6156,
+      "actual_late_orders": 276,
+      "missed_late_orders": 209,
+      "miss_rate_among_late": 0.7572463768115942,
+      "actual_on_time_orders": 5880,
+      "false_alert_orders": 492,
+      "false_alert_rate_among_on_time": 0.0836734693877551
+    },
+    {
+      "value": "2018-08",
+      "orders": 6351,
+      "actual_late_orders": 660,
+      "missed_late_orders": 573,
+      "miss_rate_among_late": 0.8681818181818182,
+      "actual_on_time_orders": 5691,
+      "false_alert_orders": 599,
+      "false_alert_rate_among_on_time": 0.10525390968195396
+    }
+  ],
+  "group_errors": {
+    "main_product_category": [
+      {
+        "feature": "main_product_category",
+        "value": "auto",
+        "actual_late_orders": 51,
+        "missed_late_orders": 46,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.09636871508379888,
+        "actual_on_time_orders": 716,
+        "false_alert_orders": 69
+      },
+      {
+        "feature": "main_product_category",
+        "value": "baby",
+        "actual_late_orders": 36,
+        "missed_late_orders": 26,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.16355140186915887,
+        "actual_on_time_orders": 428,
+        "false_alert_orders": 70
+      },
+      {
+        "feature": "main_product_category",
+        "value": "bed_bath_table",
+        "actual_late_orders": 63,
+        "missed_late_orders": 44,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.11983122362869199,
+        "actual_on_time_orders": 1185,
+        "false_alert_orders": 142
+      },
+      {
+        "feature": "main_product_category",
+        "value": "computers_accessories",
+        "actual_late_orders": 50,
+        "missed_late_orders": 45,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.05421686746987952,
+        "actual_on_time_orders": 830,
+        "false_alert_orders": 45
+      },
+      {
+        "feature": "main_product_category",
+        "value": "consoles_games",
+        "actual_late_orders": 7,
+        "missed_late_orders": 6,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.0625,
+        "actual_on_time_orders": 112,
+        "false_alert_orders": 7
+      },
+      {
+        "feature": "main_product_category",
+        "value": "construction_tools_construction",
+        "actual_late_orders": 21,
+        "missed_late_orders": 20,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.15352697095435686,
+        "actual_on_time_orders": 241,
+        "false_alert_orders": 37
+      },
+      {
+        "feature": "main_product_category",
+        "value": "cool_stuff",
+        "actual_late_orders": 20,
+        "missed_late_orders": 16,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.04032258064516129,
+        "actual_on_time_orders": 248,
+        "false_alert_orders": 10
+      },
+      {
+        "feature": "main_product_category",
+        "value": "electronics",
+        "actual_late_orders": 16,
+        "missed_late_orders": 15,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.0695364238410596,
+        "actual_on_time_orders": 302,
+        "false_alert_orders": 21
+      },
+      {
+        "feature": "main_product_category",
+        "value": "fashion_bags_accessories",
+        "actual_late_orders": 12,
+        "missed_late_orders": 12,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.057971014492753624,
+        "actual_on_time_orders": 207,
+        "false_alert_orders": 12
+      },
+      {
+        "feature": "main_product_category",
+        "value": "food",
+        "actual_late_orders": 20,
+        "missed_late_orders": 20,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.0684931506849315,
+        "actual_on_time_orders": 146,
+        "false_alert_orders": 10
+      },
+      {
+        "feature": "main_product_category",
+        "value": "furniture_decor",
+        "actual_late_orders": 43,
+        "missed_late_orders": 32,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.10512129380053908,
+        "actual_on_time_orders": 742,
+        "false_alert_orders": 78
+      },
+      {
+        "feature": "main_product_category",
+        "value": "garden_tools",
+        "actual_late_orders": 11,
+        "missed_late_orders": 10,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.08469055374592833,
+        "actual_on_time_orders": 307,
+        "false_alert_orders": 26
+      },
+      {
+        "feature": "main_product_category",
+        "value": "health_beauty",
+        "actual_late_orders": 152,
+        "missed_late_orders": 118,
+        "miss_rate_among_late": 0.7763157894736842,
+        "false_alert_rate_among_on_time": 0.10884786760025461,
+        "actual_on_time_orders": 1571,
+        "false_alert_orders": 171
+      },
+      {
+        "feature": "main_product_category",
+        "value": "home_appliances",
+        "actual_late_orders": 10,
+        "missed_late_orders": 10,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.026143790849673203,
+        "actual_on_time_orders": 153,
+        "false_alert_orders": 4
+      },
+      {
+        "feature": "main_product_category",
+        "value": "housewares",
+        "actual_late_orders": 83,
+        "missed_late_orders": 75,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.05466540999057493,
+        "actual_on_time_orders": 1061,
+        "false_alert_orders": 58
+      },
+      {
+        "feature": "main_product_category",
+        "value": "luggage_accessories",
+        "actual_late_orders": 10,
+        "missed_late_orders": 8,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.02727272727272727,
+        "actual_on_time_orders": 110,
+        "false_alert_orders": 3
+      },
+      {
+        "feature": "main_product_category",
+        "value": "perfumery",
+        "actual_late_orders": 20,
+        "missed_late_orders": 19,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.1111111111111111,
+        "actual_on_time_orders": 378,
+        "false_alert_orders": 42
+      },
+      {
+        "feature": "main_product_category",
+        "value": "pet_shop",
+        "actual_late_orders": 18,
+        "missed_late_orders": 10,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.05454545454545454,
+        "actual_on_time_orders": 330,
+        "false_alert_orders": 18
+      },
+      {
+        "feature": "main_product_category",
+        "value": "sports_leisure",
+        "actual_late_orders": 50,
+        "missed_late_orders": 41,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.07802197802197802,
+        "actual_on_time_orders": 910,
+        "false_alert_orders": 71
+      },
+      {
+        "feature": "main_product_category",
+        "value": "stationery",
+        "actual_late_orders": 33,
+        "missed_late_orders": 29,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.05846153846153846,
+        "actual_on_time_orders": 325,
+        "false_alert_orders": 19
+      },
+      {
+        "feature": "main_product_category",
+        "value": "telephony",
+        "actual_late_orders": 36,
+        "missed_late_orders": 32,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.07264957264957266,
+        "actual_on_time_orders": 468,
+        "false_alert_orders": 34
+      },
+      {
+        "feature": "main_product_category",
+        "value": "toys",
+        "actual_late_orders": 28,
+        "missed_late_orders": 25,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.0744336569579288,
+        "actual_on_time_orders": 309,
+        "false_alert_orders": 23
+      },
+      {
+        "feature": "main_product_category",
+        "value": "watches_gifts",
+        "actual_late_orders": 53,
+        "missed_late_orders": 46,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.06618407445708377,
+        "actual_on_time_orders": 967,
+        "false_alert_orders": 64
+      }
+    ],
+    "customer_state": [
+      {
+        "feature": "customer_state",
+        "value": "BA",
+        "actual_late_orders": 22,
+        "missed_late_orders": 9,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.3165137614678899,
+        "actual_on_time_orders": 436,
+        "false_alert_orders": 138
+      },
+      {
+        "feature": "customer_state",
+        "value": "CE",
+        "actual_late_orders": 2,
+        "missed_late_orders": 0,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.39759036144578314,
+        "actual_on_time_orders": 166,
+        "false_alert_orders": 66
+      },
+      {
+        "feature": "customer_state",
+        "value": "DF",
+        "actual_late_orders": 14,
+        "missed_late_orders": 12,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.014619883040935672,
+        "actual_on_time_orders": 342,
+        "false_alert_orders": 5
+      },
+      {
+        "feature": "customer_state",
+        "value": "ES",
+        "actual_late_orders": 13,
+        "missed_late_orders": 9,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.14285714285714285,
+        "actual_on_time_orders": 259,
+        "false_alert_orders": 37
+      },
+      {
+        "feature": "customer_state",
+        "value": "GO",
+        "actual_late_orders": 11,
+        "missed_late_orders": 7,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.03409090909090909,
+        "actual_on_time_orders": 264,
+        "false_alert_orders": 9
+      },
+      {
+        "feature": "customer_state",
+        "value": "MG",
+        "actual_late_orders": 33,
+        "missed_late_orders": 32,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.008397932816537468,
+        "actual_on_time_orders": 1548,
+        "false_alert_orders": 13
+      },
+      {
+        "feature": "customer_state",
+        "value": "MT",
+        "actual_late_orders": 1,
+        "missed_late_orders": 1,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.05504587155963303,
+        "actual_on_time_orders": 109,
+        "false_alert_orders": 6
+      },
+      {
+        "feature": "customer_state",
+        "value": "PA",
+        "actual_late_orders": 3,
+        "missed_late_orders": 2,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.36036036036036034,
+        "actual_on_time_orders": 111,
+        "false_alert_orders": 40
+      },
+      {
+        "feature": "customer_state",
+        "value": "PE",
+        "actual_late_orders": 12,
+        "missed_late_orders": 7,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.31004366812227074,
+        "actual_on_time_orders": 229,
+        "false_alert_orders": 71
+      },
+      {
+        "feature": "customer_state",
+        "value": "PR",
+        "actual_late_orders": 24,
+        "missed_late_orders": 24,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.006954102920723227,
+        "actual_on_time_orders": 719,
+        "false_alert_orders": 5
+      },
+      {
+        "feature": "customer_state",
+        "value": "RJ",
+        "actual_late_orders": 88,
+        "missed_late_orders": 20,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.29212752114508783,
+        "actual_on_time_orders": 1537,
+        "false_alert_orders": 449
+      },
+      {
+        "feature": "customer_state",
+        "value": "RS",
+        "actual_late_orders": 24,
+        "missed_late_orders": 17,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.06321839080459771,
+        "actual_on_time_orders": 696,
+        "false_alert_orders": 44
+      },
+      {
+        "feature": "customer_state",
+        "value": "SC",
+        "actual_late_orders": 16,
+        "missed_late_orders": 9,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.15695067264573992,
+        "actual_on_time_orders": 446,
+        "false_alert_orders": 70
+      },
+      {
+        "feature": "customer_state",
+        "value": "SP",
+        "actual_late_orders": 643,
+        "missed_late_orders": 633,
+        "miss_rate_among_late": 0.9844479004665629,
+        "false_alert_rate_among_on_time": 0.003111183887342394,
+        "actual_on_time_orders": 6107,
+        "false_alert_orders": 19
+      }
+    ],
+    "main_seller_state": [
+      {
+        "feature": "main_seller_state",
+        "value": "BA",
+        "actual_late_orders": 6,
+        "missed_late_orders": 4,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.14814814814814814,
+        "actual_on_time_orders": 108,
+        "false_alert_orders": 16
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "DF",
+        "actual_late_orders": 8,
+        "missed_late_orders": 8,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.04504504504504504,
+        "actual_on_time_orders": 111,
+        "false_alert_orders": 5
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "MA",
+        "actual_late_orders": 32,
+        "missed_late_orders": 11,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.4166666666666667,
+        "actual_on_time_orders": 132,
+        "false_alert_orders": 55
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "MG",
+        "actual_late_orders": 22,
+        "missed_late_orders": 19,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.05668016194331984,
+        "actual_on_time_orders": 988,
+        "false_alert_orders": 56
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "PR",
+        "actual_late_orders": 37,
+        "missed_late_orders": 32,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.03905540417801998,
+        "actual_on_time_orders": 1101,
+        "false_alert_orders": 43
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "RJ",
+        "actual_late_orders": 53,
+        "missed_late_orders": 13,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.22077922077922077,
+        "actual_on_time_orders": 693,
+        "false_alert_orders": 153
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "RS",
+        "actual_late_orders": 23,
+        "missed_late_orders": 21,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.01871657754010695,
+        "actual_on_time_orders": 374,
+        "false_alert_orders": 7
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "SC",
+        "actual_late_orders": 27,
+        "missed_late_orders": 18,
+        "miss_rate_among_late": null,
+        "false_alert_rate_among_on_time": 0.1006036217303823,
+        "actual_on_time_orders": 497,
+        "false_alert_orders": 50
+      },
+      {
+        "feature": "main_seller_state",
+        "value": "SP",
+        "actual_late_orders": 738,
+        "missed_late_orders": 664,
+        "miss_rate_among_late": 0.8997289972899729,
+        "false_alert_rate_among_on_time": 0.08218440327445067,
+        "actual_on_time_orders": 9284,
+        "false_alert_orders": 763
+      }
+    ]
+  },
+  "numeric_error_comparisons": {
+    "promised_lead_days": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 13.197991898148148,
+        "mean": 13.699663619315519
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 7.324699074074074,
+        "mean": 9.749095107310064
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 18.120277777777776,
+        "mean": 18.344500489939385
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 18.318564814814813,
+        "mean": 19.123106943807013
+      }
+    },
+    "item_count": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 1.0,
+        "mean": 1.0506329113924051
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 1.0,
+        "mean": 1.1251564455569463
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 1.0,
+        "mean": 1.0839760068551842
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 1.0,
+        "mean": 1.135984449663886
+      }
+    },
+    "seller_count": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 1.0,
+        "mean": 1.0
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 1.0,
+        "mean": 1.0012515644555695
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 1.0,
+        "mean": 1.0
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 1.0,
+        "mean": 1.020733781485381
+      }
+    },
+    "item_price_total": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 109.45,
+        "mean": 248.3912025316456
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 77.9,
+        "mean": 117.89282853566958
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 118.8,
+        "mean": 230.26733504712942
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 79.99,
+        "mean": 125.95350044545235
+      }
+    },
+    "freight_total": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 23.18,
+        "mean": 36.29063291139241
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 13.42,
+        "mean": 17.43645807259074
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 24.54,
+        "mean": 43.78371893744645
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 18.48,
+        "mean": 23.16978537296509
+      }
+    },
+    "mean_product_weight_g": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 787.5,
+        "mean": 3572.3860759493673
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 525.0,
+        "mean": 1806.680016687526
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 975.0,
+        "mean": 3175.7812767780633
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 550.0,
+        "mean": 1630.7377716584324
+      }
+    },
+    "mean_product_length_cm": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 25.0,
+        "mean": 32.734177215189874
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 21.0,
+        "mean": 26.909887359198997
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 30.0,
+        "mean": 33.29155955441303
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 22.0,
+        "mean": 27.91273781562516
+      }
+    },
+    "mean_product_height_cm": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 12.0,
+        "mean": 18.734177215189874
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 12.0,
+        "mean": 15.465999165623698
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 14.0,
+        "mean": 19.05641245358469
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 12.5,
+        "mean": 15.170093949947356
+      }
+    },
+    "mean_product_width_cm": {
+      "true_positive_late_caught": {
+        "orders": 158,
+        "median": 20.0,
+        "mean": 26.443037974683545
+      },
+      "false_negative_late_missed": {
+        "orders": 799,
+        "median": 17.0,
+        "mean": 21.0531914893617
+      },
+      "false_positive_on_time_flagged": {
+        "orders": 1167,
+        "median": 20.0,
+        "mean": 24.64724364467295
+      },
+      "true_negative_on_time_not_flagged": {
+        "orders": 12347,
+        "median": 19.0,
+        "mean": 21.740938033916084
+      }
+    }
+  },
+  "split_group_rates": {
+    "train": {
+      "customer_state_SP": {
+        "orders": 27204,
+        "late_orders": 1522,
+        "late_rate": 0.055947654756653434
+      },
+      "main_seller_state_SP": {
+        "orders": 47772,
+        "late_orders": 4689,
+        "late_rate": 0.09815373021853806
+      },
+      "main_product_category_health_beauty": {
+        "orders": 5377,
+        "late_orders": 511,
+        "late_rate": 0.0950344058024921
+      }
+    },
+    "validation": {
+      "customer_state_SP": {
+        "orders": 6540,
+        "late_orders": 222,
+        "late_rate": 0.03394495412844037
+      },
+      "main_seller_state_SP": {
+        "orders": 10467,
+        "late_orders": 571,
+        "late_rate": 0.054552402789720074
+      },
+      "main_product_category_health_beauty": {
+        "orders": 1521,
+        "late_orders": 111,
+        "late_rate": 0.07297830374753451
+      }
+    },
+    "test": {
+      "customer_state_SP": {
+        "orders": 6750,
+        "late_orders": 643,
+        "late_rate": 0.09525925925925927
+      },
+      "main_seller_state_SP": {
+        "orders": 10022,
+        "late_orders": 738,
+        "late_rate": 0.07363799640790261
+      },
+      "main_product_category_health_beauty": {
+        "orders": 1723,
+        "late_orders": 152,
+        "late_rate": 0.08821822402785838
+      }
+    }
+  },
+  "selected_model_signed_coefficients": {
+    "customer_state_SP": -1.4367750987185606,
+    "main_seller_state_SP": 0.30253753392882127,
+    "main_product_category_health_beauty": 0.12212077958846101,
+    "promised_lead_days": -0.5507901744349687
+  }
+}

@@ -1,0 +1,387 @@
+{
+  "source": "https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce",
+  "license": "CC BY-NC-SA 4.0 (per Kaggle dataset card; educational non-commercial use)",
+  "raw_files_are_modified": false,
+  "files": {
+    "olist_customers_dataset.csv": {
+      "rows": 99441,
+      "columns_count": 5,
+      "columns": [
+        {
+          "name": "customer_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "customer_unique_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "customer_zip_code_prefix",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "customer_city",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "customer_state",
+          "pandas_dtype": "str"
+        }
+      ],
+      "missing_by_column": {},
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 0,
+      "key_definition_checked": "customer_id"
+    },
+    "olist_geolocation_dataset.csv": {
+      "rows": 1000163,
+      "columns_count": 5,
+      "columns": [
+        {
+          "name": "geolocation_zip_code_prefix",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "geolocation_lat",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "geolocation_lng",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "geolocation_city",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "geolocation_state",
+          "pandas_dtype": "str"
+        }
+      ],
+      "missing_by_column": {},
+      "exact_duplicate_rows": 261831,
+      "key_duplicate_rows": null,
+      "key_definition_checked": null
+    },
+    "olist_order_items_dataset.csv": {
+      "rows": 112650,
+      "columns_count": 7,
+      "columns": [
+        {
+          "name": "order_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_item_id",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "product_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "seller_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "shipping_limit_date",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "price",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "freight_value",
+          "pandas_dtype": "float64"
+        }
+      ],
+      "missing_by_column": {},
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 0,
+      "key_definition_checked": "order_id,order_item_id"
+    },
+    "olist_order_payments_dataset.csv": {
+      "rows": 103886,
+      "columns_count": 5,
+      "columns": [
+        {
+          "name": "order_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "payment_sequential",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "payment_type",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "payment_installments",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "payment_value",
+          "pandas_dtype": "float64"
+        }
+      ],
+      "missing_by_column": {},
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 0,
+      "key_definition_checked": "order_id,payment_sequential"
+    },
+    "olist_order_reviews_dataset.csv": {
+      "rows": 99224,
+      "columns_count": 7,
+      "columns": [
+        {
+          "name": "review_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "review_score",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "review_comment_title",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "review_comment_message",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "review_creation_date",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "review_answer_timestamp",
+          "pandas_dtype": "str"
+        }
+      ],
+      "missing_by_column": {
+        "review_comment_title": 87656,
+        "review_comment_message": 58247
+      },
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 1603,
+      "key_definition_checked": "review_id"
+    },
+    "olist_orders_dataset.csv": {
+      "rows": 99441,
+      "columns_count": 8,
+      "columns": [
+        {
+          "name": "order_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "customer_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_status",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_purchase_timestamp",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_approved_at",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_delivered_carrier_date",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_delivered_customer_date",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "order_estimated_delivery_date",
+          "pandas_dtype": "str"
+        }
+      ],
+      "missing_by_column": {
+        "order_approved_at": 160,
+        "order_delivered_carrier_date": 1783,
+        "order_delivered_customer_date": 2965
+      },
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 0,
+      "key_definition_checked": "order_id"
+    },
+    "olist_products_dataset.csv": {
+      "rows": 32951,
+      "columns_count": 9,
+      "columns": [
+        {
+          "name": "product_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "product_category_name",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "product_name_lenght",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "product_description_lenght",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "product_photos_qty",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "product_weight_g",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "product_length_cm",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "product_height_cm",
+          "pandas_dtype": "float64"
+        },
+        {
+          "name": "product_width_cm",
+          "pandas_dtype": "float64"
+        }
+      ],
+      "missing_by_column": {
+        "product_category_name": 610,
+        "product_name_lenght": 610,
+        "product_description_lenght": 610,
+        "product_photos_qty": 610,
+        "product_weight_g": 2,
+        "product_length_cm": 2,
+        "product_height_cm": 2,
+        "product_width_cm": 2
+      },
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 0,
+      "key_definition_checked": "product_id"
+    },
+    "olist_sellers_dataset.csv": {
+      "rows": 3095,
+      "columns_count": 4,
+      "columns": [
+        {
+          "name": "seller_id",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "seller_zip_code_prefix",
+          "pandas_dtype": "int64"
+        },
+        {
+          "name": "seller_city",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "seller_state",
+          "pandas_dtype": "str"
+        }
+      ],
+      "missing_by_column": {},
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": 0,
+      "key_definition_checked": "seller_id"
+    },
+    "product_category_name_translation.csv": {
+      "rows": 71,
+      "columns_count": 2,
+      "columns": [
+        {
+          "name": "product_category_name",
+          "pandas_dtype": "str"
+        },
+        {
+          "name": "product_category_name_english",
+          "pandas_dtype": "str"
+        }
+      ],
+      "missing_by_column": {},
+      "exact_duplicate_rows": 0,
+      "key_duplicate_rows": null,
+      "key_definition_checked": null
+    }
+  },
+  "relationships": [
+    {
+      "child_file": "olist_order_items_dataset.csv",
+      "child_key": "order_id",
+      "parent_file": "olist_orders_dataset.csv",
+      "parent_key": "order_id",
+      "child_non_null_rows": 112650,
+      "orphan_rows": 0
+    },
+    {
+      "child_file": "olist_order_items_dataset.csv",
+      "child_key": "product_id",
+      "parent_file": "olist_products_dataset.csv",
+      "parent_key": "product_id",
+      "child_non_null_rows": 112650,
+      "orphan_rows": 0
+    },
+    {
+      "child_file": "olist_order_items_dataset.csv",
+      "child_key": "seller_id",
+      "parent_file": "olist_sellers_dataset.csv",
+      "parent_key": "seller_id",
+      "child_non_null_rows": 112650,
+      "orphan_rows": 0
+    },
+    {
+      "child_file": "olist_order_payments_dataset.csv",
+      "child_key": "order_id",
+      "parent_file": "olist_orders_dataset.csv",
+      "parent_key": "order_id",
+      "child_non_null_rows": 103886,
+      "orphan_rows": 0
+    },
+    {
+      "child_file": "olist_order_reviews_dataset.csv",
+      "child_key": "order_id",
+      "parent_file": "olist_orders_dataset.csv",
+      "parent_key": "order_id",
+      "child_non_null_rows": 99224,
+      "orphan_rows": 0
+    },
+    {
+      "child_file": "olist_orders_dataset.csv",
+      "child_key": "customer_id",
+      "parent_file": "olist_customers_dataset.csv",
+      "parent_key": "customer_id",
+      "child_non_null_rows": 99441,
+      "orphan_rows": 0
+    },
+    {
+      "child_file": "olist_customers_dataset.csv",
+      "child_key": "customer_zip_code_prefix",
+      "parent_file": "olist_geolocation_dataset.csv",
+      "parent_key": "geolocation_zip_code_prefix",
+      "child_non_null_rows": 99441,
+      "orphan_rows": 278
+    },
+    {
+      "child_file": "olist_sellers_dataset.csv",
+      "child_key": "seller_zip_code_prefix",
+      "parent_file": "olist_geolocation_dataset.csv",
+      "parent_key": "geolocation_zip_code_prefix",
+      "child_non_null_rows": 3095,
+      "orphan_rows": 7
+    }
+  ]
+}

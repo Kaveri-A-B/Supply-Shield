@@ -4,3 +4,10 @@ server/.env
 .env
 .DS_Store
 npm-debug.log*
+ml/data/raw/*
+!ml/data/raw/.gitkeep
+ml/data/downloads/
+ml/.kaggle/
+ml/artifacts/
+ml/**/__pycache__/
+ml/**/*.pyc

@@ -1,0 +1,169 @@
+{
+  "source": "https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce",
+  "license": "CC BY-NC-SA 4.0 (per Kaggle dataset card; non-commercial educational use)",
+  "prediction_time_assumption": "order purchase/placement; this is a design assumption for future work, not a trained model",
+  "target_definition": "late_delivery = actual customer delivery timestamp > estimated delivery timestamp",
+  "eligible_order_rule": "order_status == delivered and order_id, actual customer delivery timestamp, and estimated delivery timestamp are valid",
+  "excluded_records": {
+    "total_orders": 99441,
+    "not_status_delivered": 2963,
+    "status_delivered_missing_or_invalid_actual_timestamp": 8,
+    "status_delivered_missing_or_invalid_estimated_timestamp": 0,
+    "status_delivered_missing_order_id": 0,
+    "eligible_delivered_orders": 96470
+  },
+  "target_summary": {
+    "eligible_orders": 96470,
+    "on_time_or_early_count": 88644,
+    "late_count": 7826,
+    "on_time_or_early_share": 0.9188763346117964,
+    "late_share": 0.08112366538820359,
+    "mean_days_vs_estimate": -11.17812572885353,
+    "median_days_vs_estimate": -11.948101851851852
+  },
+  "purchase_timestamp_range": {
+    "minimum": "2016-09-15T12:16:38+00:00",
+    "maximum": "2018-08-29T15:00:37+00:00"
+  },
+  "monthly_late_rate": [
+    {
+      "purchase_month": "2016-09",
+      "eligible_orders": 1,
+      "late_rate": 1.0
+    },
+    {
+      "purchase_month": "2016-10",
+      "eligible_orders": 265,
+      "late_rate": 0.011320754716981131
+    },
+    {
+      "purchase_month": "2016-12",
+      "eligible_orders": 1,
+      "late_rate": 0.0
+    },
+    {
+      "purchase_month": "2017-01",
+      "eligible_orders": 750,
+      "late_rate": 0.030666666666666665
+    },
+    {
+      "purchase_month": "2017-02",
+      "eligible_orders": 1653,
+      "late_rate": 0.03206291591046582
+    },
+    {
+      "purchase_month": "2017-03",
+      "eligible_orders": 2546,
+      "late_rate": 0.05577376276512176
+    },
+    {
+      "purchase_month": "2017-04",
+      "eligible_orders": 2303,
+      "late_rate": 0.07859313938341293
+    },
+    {
+      "purchase_month": "2017-05",
+      "eligible_orders": 3545,
+      "late_rate": 0.03610719322990127
+    },
+    {
+      "purchase_month": "2017-06",
+      "eligible_orders": 3135,
+      "late_rate": 0.03859649122807018
+    },
+    {
+      "purchase_month": "2017-07",
+      "eligible_orders": 3872,
+      "late_rate": 0.034349173553719005
+    },
+    {
+      "purchase_month": "2017-08",
+      "eligible_orders": 4193,
+      "late_rate": 0.03315048891008824
+    },
+    {
+      "purchase_month": "2017-09",
+      "eligible_orders": 4150,
+      "late_rate": 0.052048192771084335
+    },
+    {
+      "purchase_month": "2017-10",
+      "eligible_orders": 4478,
+      "late_rate": 0.05292541313086199
+    },
+    {
+      "purchase_month": "2017-11",
+      "eligible_orders": 7288,
+      "late_rate": 0.1431119648737651
+    },
+    {
+      "purchase_month": "2017-12",
+      "eligible_orders": 5513,
+      "late_rate": 0.08380192272809722
+    },
+    {
+      "purchase_month": "2018-01",
+      "eligible_orders": 7069,
+      "late_rate": 0.06563870420144292
+    },
+    {
+      "purchase_month": "2018-02",
+      "eligible_orders": 6555,
+      "late_rate": 0.15987795575896263
+    },
+    {
+      "purchase_month": "2018-03",
+      "eligible_orders": 7003,
+      "late_rate": 0.21362273311437954
+    },
+    {
+      "purchase_month": "2018-04",
+      "eligible_orders": 6798,
+      "late_rate": 0.05310385407472786
+    },
+    {
+      "purchase_month": "2018-05",
+      "eligible_orders": 6749,
+      "late_rate": 0.08238257519632539
+    },
+    {
+      "purchase_month": "2018-06",
+      "eligible_orders": 6096,
+      "late_rate": 0.013615485564304463
+    },
+    {
+      "purchase_month": "2018-07",
+      "eligible_orders": 6156,
+      "late_rate": 0.04483430799220273
+    },
+    {
+      "purchase_month": "2018-08",
+      "eligible_orders": 6351,
+      "late_rate": 0.10392064241851677
+    }
+  ],
+  "model_training_performed": false,
+  "figures": [
+    "late_delivery_class_counts.png",
+    "late_rate_by_category.png",
+    "late_rate_by_purchase_month.png",
+    "late_rate_by_seller_state.png"
+  ],
+  "feature_candidate_notes": {
+    "potentially_available_at_order_purchase": [
+      "order_purchase_timestamp calendar features",
+      "customer/seller coarse state or city features (after privacy and sparse-category review)",
+      "product category and item count",
+      "item price/freight known at purchase if the source semantics confirm availability",
+      "seller count per order"
+    ],
+    "exclude_from_predictors": [
+      "order_delivered_customer_date (target source)",
+      "order_estimated_delivery_date (target boundary and a date known at order time; consider only if input protocol permits)",
+      "order_delivered_carrier_date (post-purchase)",
+      "review scores/text/timestamps (post-delivery or outcome-adjacent)",
+      "terminal order_status (filter only to define eligible historical labels, never a live predictor)",
+      "raw order/customer/seller/product identifiers as model features"
+    ]
+  }
+}

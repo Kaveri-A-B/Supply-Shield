@@ -1,0 +1,160 @@
+{
+  "purpose": "Exploratory point-in-time and feature sensitivity review; train and validation only.",
+  "test_period_used_for_feature_variant_metrics_or_selection": false,
+  "prior_test_error_review_cited_for_context_only": true,
+  "training_rows": 67529,
+  "validation_rows": 14470,
+  "training_period": [
+    "2016-09-15T12:16:38+00:00",
+    "2018-04-15T20:12:35+00:00"
+  ],
+  "validation_period": [
+    "2018-04-15T20:17:11+00:00",
+    "2018-06-21T08:29:29+00:00"
+  ],
+  "validation_class_prevalence": 0.053420870767104355,
+  "evaluation_warning": "Feature variants and thresholds are both compared on the same validation period. Metrics are exploratory and optimistic; they are not a fresh generalization estimate. Do not use the previously reviewed test period for more tuning.",
+  "prediction_time_assessment": {
+    "order_purchase_timestamp_calendar_features": "Available by definition at purchase time.",
+    "order_estimated_delivery_date_and_promised_lead_days": "High uncertainty for deployment: the CSV provides one final ETA value, not an ETA history/change log. Third-party data dictionaries describe it as the date shown at purchase, but the Kaggle source files do not let us verify that the exported value was not updated later. Exclude it for a conservative feature set until source provenance confirms timing.",
+    "item_price_freight_product_category_dimensions": "Plausibly available during checkout/catalog selection, but the export has no feature capture timestamps; verify against the source system before live scoring.",
+    "customer_state_and_seller_state": "Broad geography is plausibly known at purchase, but the test shows time-varying subgroup rates and a high miss rate in customer state SP. Avoid relying on coarse geography alone without drift monitoring and further validation.",
+    "order_status_actual_delivery_review_carrier_delivery_payment_and_shipping_limit_fields": "Excluded because they are post-purchase/outcome-adjacent, labels, or their availability is not established at order purchase."
+  },
+  "variants": {
+    "Reference feature set": {
+      "feature_count": 15,
+      "features": [
+        "purchase_month",
+        "purchase_day_of_week",
+        "purchase_hour",
+        "customer_state",
+        "main_seller_state",
+        "main_product_category",
+        "promised_lead_days",
+        "item_count",
+        "seller_count",
+        "item_price_total",
+        "freight_total",
+        "mean_product_weight_g",
+        "mean_product_length_cm",
+        "mean_product_height_cm",
+        "mean_product_width_cm"
+      ],
+      "validation_threshold_selection": {
+        "precision": 0.1695906432748538,
+        "recall": 0.3001293661060802,
+        "f1": 0.21672115833722558
+      },
+      "validation_metrics": {
+        "threshold_selected_on_validation": 0.5048629033381414,
+        "validation_accuracy_at_selected_threshold": 0.8841050449205252,
+        "validation_late_precision_at_selected_threshold": 0.1695906432748538,
+        "validation_late_recall_at_selected_threshold": 0.3001293661060802,
+        "validation_late_f1_at_selected_threshold": 0.2167211583372256,
+        "validation_average_precision": 0.12399946803356675
+      },
+      "f1_change_vs_reference": 0.0
+    },
+    "Without ETA-derived promised lead": {
+      "feature_count": 14,
+      "features": [
+        "purchase_month",
+        "purchase_day_of_week",
+        "purchase_hour",
+        "customer_state",
+        "main_seller_state",
+        "main_product_category",
+        "item_count",
+        "seller_count",
+        "item_price_total",
+        "freight_total",
+        "mean_product_weight_g",
+        "mean_product_length_cm",
+        "mean_product_height_cm",
+        "mean_product_width_cm"
+      ],
+      "validation_threshold_selection": {
+        "precision": 0.093409915356711,
+        "recall": 0.3997412677878396,
+        "f1": 0.15143347218818917
+      },
+      "validation_metrics": {
+        "threshold_selected_on_validation": 0.4101984262382577,
+        "validation_accuracy_at_selected_threshold": 0.7606772633033864,
+        "validation_late_precision_at_selected_threshold": 0.093409915356711,
+        "validation_late_recall_at_selected_threshold": 0.3997412677878396,
+        "validation_late_f1_at_selected_threshold": 0.15143347218818917,
+        "validation_average_precision": 0.07989158193718657
+      },
+      "f1_change_vs_reference": -0.06528768614903643
+    },
+    "Without customer/seller geography": {
+      "feature_count": 13,
+      "features": [
+        "purchase_month",
+        "purchase_day_of_week",
+        "purchase_hour",
+        "main_product_category",
+        "promised_lead_days",
+        "item_count",
+        "seller_count",
+        "item_price_total",
+        "freight_total",
+        "mean_product_weight_g",
+        "mean_product_length_cm",
+        "mean_product_height_cm",
+        "mean_product_width_cm"
+      ],
+      "validation_threshold_selection": {
+        "precision": 0.0670108637194794,
+        "recall": 0.8059508408796895,
+        "f1": 0.123733862959285
+      },
+      "validation_metrics": {
+        "threshold_selected_on_validation": 0.26792761536861753,
+        "validation_accuracy_at_selected_threshold": 0.39018659295093294,
+        "validation_late_precision_at_selected_threshold": 0.0670108637194794,
+        "validation_late_recall_at_selected_threshold": 0.8059508408796895,
+        "validation_late_f1_at_selected_threshold": 0.123733862959285,
+        "validation_average_precision": 0.06383716863381275
+      },
+      "f1_change_vs_reference": -0.09298729537794061
+    },
+    "Conservative: without ETA lead or geography": {
+      "feature_count": 12,
+      "features": [
+        "purchase_month",
+        "purchase_day_of_week",
+        "purchase_hour",
+        "main_product_category",
+        "item_count",
+        "seller_count",
+        "item_price_total",
+        "freight_total",
+        "mean_product_weight_g",
+        "mean_product_length_cm",
+        "mean_product_height_cm",
+        "mean_product_width_cm"
+      ],
+      "validation_threshold_selection": {
+        "precision": 0.056475081847944704,
+        "recall": 0.8033635187580854,
+        "f1": 0.10553148100943155
+      },
+      "validation_metrics": {
+        "threshold_selected_on_validation": 0.2519314404070034,
+        "validation_accuracy_at_selected_threshold": 0.27249481686247407,
+        "validation_late_precision_at_selected_threshold": 0.056475081847944704,
+        "validation_late_recall_at_selected_threshold": 0.8033635187580854,
+        "validation_late_f1_at_selected_threshold": 0.10553148100943156,
+        "validation_average_precision": 0.055549160261787744
+      },
+      "f1_change_vs_reference": -0.11118967732779404
+    }
+  },
+  "previously_selected_model_version": "olist-late-delivery-educational-v1",
+  "unchanged_current_model_artifact": "ml\\artifacts\\olist-late-delivery-educational-v1.joblib",
+  "current_model_was_overwritten": false,
+  "scikit_learn_version": "1.9.1"
+}
