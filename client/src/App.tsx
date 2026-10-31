@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { createDemoWorkspace, type Alert, type InventoryItem, type ReturnRequest, type Shipment, type Supplier } from './data'
 
-type Section = 'Overview' | 'Shipments' | 'Inventory' | 'Suppliers' | 'Returns' | 'Alerts' | 'What-if' | 'Model & data' | 'Branding'
+type Section = 'Overview' | 'Shipments' | 'Live Tracking' | 'Risk Prediction' | 'Disruption Intelligence' | 'Inventory' | 'Supplier Network' | 'Returns' | 'Alerts' | 'What-if Simulator' | 'AI Recovery Planner' | 'Reports & Analytics' | 'AI Assistant' | 'Settings' | 'Branding'
 type RecordKind = 'shipments' | 'inventory' | 'suppliers' | 'returns' | 'alerts'
 type ManagedRecord = { id: string; [key: string]: unknown }
 
@@ -88,15 +88,21 @@ const recordDefinitions: Record<RecordKind, { endpoint: string; fields: RecordFi
 }
 
 const sections: { label: Section; icon: typeof LayoutDashboard; group: string }[] = [
-  { label: 'Overview', icon: LayoutDashboard, group: 'WORKSPACE' },
-  { label: 'Shipments', icon: Truck, group: 'WORKSPACE' },
-  { label: 'Inventory', icon: Box, group: 'WORKSPACE' },
-  { label: 'Suppliers', icon: Users, group: 'WORKSPACE' },
-  { label: 'Returns', icon: RotateCcw, group: 'WORKSPACE' },
-  { label: 'Alerts', icon: Bell, group: 'MONITOR' },
-  { label: 'What-if', icon: Activity, group: 'MONITOR' },
-  { label: 'Model & data', icon: SlidersHorizontal, group: 'MANAGE' },
-  { label: 'Branding', icon: Sparkles, group: 'MANAGE' },
+  { label: 'Overview', icon: LayoutDashboard, group: 'OPERATIONS' },
+  { label: 'Shipments', icon: Truck, group: 'OPERATIONS' },
+  { label: 'Live Tracking', icon: Truck, group: 'OPERATIONS' },
+  { label: 'Inventory', icon: Box, group: 'OPERATIONS' },
+  { label: 'Supplier Network', icon: Users, group: 'OPERATIONS' },
+  { label: 'Returns', icon: RotateCcw, group: 'OPERATIONS' },
+  { label: 'Risk Prediction', icon: Activity, group: 'INTELLIGENCE' },
+  { label: 'Disruption Intelligence', icon: Cloud, group: 'INTELLIGENCE' },
+  { label: 'Alerts', icon: Bell, group: 'INTELLIGENCE' },
+  { label: 'What-if Simulator', icon: Activity, group: 'INTELLIGENCE' },
+  { label: 'AI Recovery Planner', icon: ShieldCheck, group: 'INTELLIGENCE' },
+  { label: 'Reports & Analytics', icon: LayoutDashboard, group: 'WORKSPACE' },
+  { label: 'AI Assistant', icon: Sparkles, group: 'WORKSPACE' },
+  { label: 'Settings', icon: SlidersHorizontal, group: 'WORKSPACE' },
+  { label: 'Branding', icon: Sparkles, group: 'WORKSPACE' },
 ]
 
 function toManagedRecords(records: Array<Shipment | Alert | InventoryItem | Supplier | ReturnRequest>): ManagedRecord[] {
@@ -324,10 +330,22 @@ function App() {
   const activeAlerts = alerts.length
   const title = section === 'Overview' ? 'Supply chain overview' : section
   const description = section === 'Overview'
-    ? 'Here’s what’s happening across your supply chain today.'
+    ? 'Detect early. Understand exposure. Decide with the records you have.'
     : section === 'Branding'
       ? 'Make the SupplyShield mark your own.'
-      : `Monitor and manage your ${section.toLowerCase()} across the network.`
+      : section === 'Live Tracking'
+        ? 'Review shipment routes from workspace records. No live GPS feed is connected.'
+        : section === 'Risk Prediction'
+          ? 'Review manually entered scores and status signals. No prediction model is connected.'
+          : section === 'Disruption Intelligence'
+            ? 'See recorded alerts and operational signals without filling in missing data.'
+            : section === 'AI Recovery Planner'
+              ? 'Compare existing supplier records for shipments that need review.'
+              : section === 'AI Assistant'
+                ? 'Ask for a quick summary of the records in this workspace.'
+                : section === 'Reports & Analytics'
+                  ? 'Explore shipment, supplier, and inventory values currently on file.'
+                  : `Monitor and manage your ${section.toLowerCase()} across the network.`
 
   async function acknowledge(alertId: string) {
     try {
@@ -393,7 +411,7 @@ function App() {
         <div className="workspace-switch"><span className="workspace-avatar">S</span><span className="workspace-meta"><strong>SupplyShield</strong><small>Operations workspace</small></span></div>
       </div>
       <nav className="nav-list" aria-label="Main navigation">
-        {(['WORKSPACE', 'MONITOR', 'MANAGE'] as const).map(group => <div className="nav-group" key={group}>
+        {(['OPERATIONS', 'INTELLIGENCE', 'WORKSPACE'] as const).map(group => <div className="nav-group" key={group}>
           <p className="nav-heading">{group}</p>
           {sections.filter(item => item.group === group).map(item => {
             const Icon = item.icon
@@ -409,7 +427,7 @@ function App() {
           <div className="plan-icon"><Sparkles size={16} /></div>
           <strong>Supply chain, in sync.</strong>
           <p>Make every decision with a clearer picture.</p>
-          <button onClick={() => setSection('Model & data')}>Explore data status <ArrowRight size={14} /></button>
+          <button onClick={() => setSection('Settings')}>Explore data status <ArrowRight size={14} /></button>
           <div className="plan-orb orb-one" /><div className="plan-orb orb-two" />
         </div>
         <button className="nav-item support-item" onClick={() => setHelpOpen(true)}><CircleHelp size={18} /><span>Help & support</span><span className="support-shortcut">?</span></button>
@@ -452,38 +470,71 @@ function App() {
             <div className="preview-footer"><span><span className="preview-dot" /> {logoStyle}</span><span>360 × 96 px</span></div>
           </div>
         </section> : section !== 'Overview' ? <section className="panel module-panel">
-          <div className="panel-heading"><div><h2>{section} overview</h2><p>{section === 'Returns'
+          <div className="panel-heading"><div><h2>{section === 'Live Tracking' ? 'Route monitoring' : section === 'Risk Prediction' ? 'Recorded shipment risk' : section === 'AI Recovery Planner' ? 'Recovery options to review' : section === 'Reports & Analytics' ? 'Workspace analytics' : section === 'AI Assistant' ? 'Operations assistant' : `${section} overview`}</h2><p>{section === 'Returns'
             ? 'Track return request and completion dates. Best = before deadline · Good = deadline date · Poor = after deadline.'
-            : 'Records are saved in MongoDB.'}</p></div></div>
-          {section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} demoMode={demoMode} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
-            section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} demoMode={demoMode} suppliers={suppliers} searchQuery={query} onChanged={loadWorkspace} onDemoShipmentChange={shipment => setShipments(current => current.map(item => item.id === shipment.id ? shipment : item))} onNotify={setToast} /> :
-              section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} demoMode={demoMode} suppliers={suppliers} shipments={shipments} onChanged={loadWorkspace} onDemoInventoryChange={item => setInventoryItems(current => current.map(existing => existing.id === item.id ? item : existing))} onNotify={setToast} /> :
-                section === 'Suppliers' ? <RecordManager kind="suppliers" records={suppliers} demoMode={demoMode} returnRequests={returnRequests} onChanged={loadWorkspace} /> :
-                  section === 'Returns' ? <RecordManager kind="returns" records={returnRequests} demoMode={demoMode} suppliers={suppliers} inventoryItems={inventoryItems} onChanged={loadWorkspace} /> :
-                    section === 'What-if' ? <WhatIfPanel items={inventoryItems} /> : <ModelDataPanel />}
+            : section === 'Live Tracking'
+              ? 'Route labels only. This workspace has no coordinates or live carrier feed.'
+              : section === 'Risk Prediction'
+                ? 'Bands summarize manually entered scores; no model probabilities are available.'
+                : section === 'Disruption Intelligence'
+                  ? 'Counts come from alert text and inventory status currently stored in this workspace.'
+                  : section === 'AI Recovery Planner'
+                    ? 'Supplier reliability is entered data. Confirm capacity and price before making a change.'
+                    : section === 'AI Assistant'
+                      ? 'Local, rules-based summaries of workspace records. No AI service is connected.'
+                      : section === 'Reports & Analytics'
+                        ? 'Charts use current workspace records only; no historical dataset is loaded.'
+                        : ['Shipments', 'Inventory', 'Supplier Network', 'Alerts'].includes(section)
+                          ? demoMode ? 'Read-only sample records are shown because no saved workspace records are available.' : 'Records are saved in MongoDB.'
+                          : 'Review workspace data and configuration.'}</p></div></div>
+          {section === 'Live Tracking' ? <RoutePanel shipments={shipments} onView={id => { setSection('Shipments'); setQuery(id) }} /> :
+            section === 'Risk Prediction' ? <RiskMonitorPanel shipments={shipments} onReview={id => { setSection('Shipments'); setQuery(id) }} /> :
+              section === 'Disruption Intelligence' ? <DisruptionPanel alerts={alertRecords} inventoryItems={inventoryItems} shipments={shipments} /> :
+                section === 'AI Recovery Planner' ? <RecoveryPlannerPanel shipments={shipments} suppliers={suppliers} onReview={id => { setSection('Shipments'); setQuery(id) }} /> :
+                  section === 'Reports & Analytics' ? <AnalyticsPanel shipments={shipments} inventoryItems={inventoryItems} suppliers={suppliers} onExport={exportReport} /> :
+                    section === 'AI Assistant' ? <AssistantPanel shipments={shipments} inventoryItems={inventoryItems} suppliers={suppliers} alerts={alertRecords} /> :
+                      section === 'Alerts' ? <RecordManager kind="alerts" records={alertRecords} demoMode={demoMode} onChanged={loadWorkspace} onAcknowledge={acknowledge} /> :
+                        section === 'Shipments' ? <RecordManager kind="shipments" records={shipments} demoMode={demoMode} suppliers={suppliers} searchQuery={query} onChanged={loadWorkspace} onDemoShipmentChange={shipment => setShipments(current => current.map(item => item.id === shipment.id ? shipment : item))} onNotify={setToast} /> :
+                          section === 'Inventory' ? <RecordManager kind="inventory" records={inventoryItems} demoMode={demoMode} suppliers={suppliers} shipments={shipments} onChanged={loadWorkspace} onDemoInventoryChange={item => setInventoryItems(current => current.map(existing => existing.id === item.id ? item : existing))} onNotify={setToast} /> :
+                            section === 'Supplier Network' ? <RecordManager kind="suppliers" records={suppliers} demoMode={demoMode} returnRequests={returnRequests} onChanged={loadWorkspace} /> :
+                              section === 'Returns' ? <RecordManager kind="returns" records={returnRequests} demoMode={demoMode} suppliers={suppliers} inventoryItems={inventoryItems} onChanged={loadWorkspace} /> :
+                                section === 'What-if Simulator' ? <WhatIfPanel items={inventoryItems} /> : <ModelDataPanel />}
         </section> : <>
           <section className="metric-grid" aria-label="Supply chain metrics">
-            <MetricCard title="On-time delivery" value={suppliers.length ? `${(suppliers.reduce((sum, item) => sum + Number.parseFloat(item.onTime), 0) / suppliers.length).toFixed(1)}%` : '—'} change={`${suppliers.length} suppliers`} positive caption="database records" icon={<PackageCheck size={18} />} />
-            <MetricCard title="Shipments at risk" value={String(shipments.filter(shipmentNeedsReview).length)} change={`${shipments.length} total`} positive={false} caption="current records" icon={<Truck size={18} />} />
-            <MetricCard title="Inventory coverage" value={inventoryItems.some(item => item.cover !== null) ? (inventoryItems.reduce((sum, item) => sum + (item.cover ?? 0), 0) / inventoryItems.filter(item => item.cover !== null).length).toFixed(1) : '—'} suffix=" days" change={`${inventoryItems.length} items`} positive={false} caption="database records" icon={<Box size={18} />} />
-            <MetricCard title="Supplier health" value={suppliers.length ? (suppliers.reduce((sum, item) => sum + item.score, 0) / suppliers.length).toFixed(0) : '—'} suffix="/100" change={`${suppliers.length} suppliers`} positive caption="database records" icon={<Users size={18} />} />
+            <MetricCard title="Total shipments" value={String(shipments.length)} change="current records" positive caption="all routes" icon={<Truck size={18} />} />
+            <MetricCard title="On-time shipments" value={String(shipments.filter(item => item.status === 'On track').length)} change="current status" positive caption="not historical" icon={<PackageCheck size={18} />} />
+            <MetricCard title="Delayed shipments" value={String(shipments.filter(item => item.status === 'Delayed').length)} change="current status" positive={false} caption="review routes" icon={<Clock3 size={18} />} />
+            <MetricCard title="High-risk shipments" value={String(shipments.filter(item => item.risk >= 70).length)} change="entered score ≥70" positive={false} caption="not a prediction" icon={<Activity size={18} />} />
+            <MetricCard title="Average entered risk" value={shipments.length ? (shipments.reduce((sum, item) => sum + item.risk, 0) / shipments.length).toFixed(0) : '—'} suffix="/100" change="current scores" positive={false} caption="manual values" icon={<ShieldCheck size={18} />} />
+            <MetricCard title="Financial impact" value="Unavailable" change="cost data missing" positive={false} caption="not estimated" icon={<CircleHelp size={18} />} />
           </section>
           <section className="dashboard-grid">
             <div className="panel risk-panel">
-              <div className="panel-heading chart-heading"><div><div className="title-with-info"><h2>Current shipment risk</h2><button className="info-button" aria-label="Risk score information" title="Risk scores are manually entered, not generated predictions. At-risk and delayed shipments, or scores of 70+, can be reviewed for supplier alternatives." onClick={() => setToast('Risk values are manually entered, not predictions. At-risk, delayed, and 70+ risk shipments can be reviewed for supplier alternatives.')}><CircleHelp size={15} /></button></div><p>Scores entered on current shipment records</p></div><span className="tool-pill">{shipments.length} records</span></div>
-              <div className="risk-summary"><div><span className="summary-number">{shipments.filter(shipmentNeedsReview).length}</span><span className="summary-label">shipments needing review</span></div></div>
+              <div className="panel-heading chart-heading"><div><div className="title-with-info"><h2>Operational risk profile</h2><button className="info-button" aria-label="Risk score information" title="These are manually entered scores, not generated predictions." onClick={() => setToast('Risk values are entered on shipment records. No prediction model or probability is connected.')}><CircleHelp size={15} /></button></div><p>Current shipment scores, in workspace order</p></div><span className="tool-pill">{shipments.length} records</span></div>
+              <div className="risk-summary"><div><span className="summary-number">{shipments.filter(shipmentNeedsReview).length}</span><span className="summary-label">shipments flagged for review</span></div><button className="text-link" onClick={() => setSection('Risk Prediction')}>Review risk bands <ArrowRight size={14} /></button></div>
               <TrendChart values={shipments.slice(0, 24).map(item => item.risk)} />
-              <div className="chart-legend"><span><i className="legend-line" /> Risk score</span><span className="chart-note">Entered record values · Not a model prediction</span></div>
+              <div className="chart-legend"><span><i className="legend-line" /> Entered risk score</span><span className="chart-note">No prediction model connected</span></div>
+            </div>
+            <div className="panel status-panel">
+              <div className="panel-heading"><div><h2>Shipment status</h2><p>Current records by entered status</p></div><span className="tool-pill">{shipments.length} total</span></div>
+              <ShipmentStatusChart shipments={shipments} />
+              <div className="status-panel-footer"><span>On track and delayed labels reflect saved records.</span><button className="text-link" onClick={() => setSection('Shipments')}>Open shipments <ArrowRight size={14} /></button></div>
+            </div>
+          </section>
+          <section className="dashboard-grid tracking-dashboard-grid">
+            <div className="panel route-dashboard-panel">
+              <div className="panel-heading"><div><h2>Network route monitor</h2><p>Route text from shipment records · schematic view</p></div><button className="text-link" onClick={() => setSection('Live Tracking')}>Open tracking <ArrowRight size={14} /></button></div>
+              <RoutePanel shipments={shipments.slice(0, 3)} onView={id => { setSection('Shipments'); setQuery(id) }} compact />
             </div>
             <div className="panel alerts-panel">
-              <div className="panel-heading"><div><h2>Needs attention <span className="heading-count">{activeAlerts}</span></h2><p>Priority items to review</p></div><button className="text-link" onClick={() => setSection('Alerts')}>View all <ArrowRight size={14} /></button></div>
+              <div className="panel-heading"><div><h2>Needs attention <span className="heading-count">{activeAlerts}</span></h2><p>Active workspace alerts</p></div><button className="text-link" onClick={() => setSection('Alerts')}>View all <ArrowRight size={14} /></button></div>
               <AlertList alerts={alerts.slice(0, 3)} onAcknowledge={acknowledge} compact disabled={demoMode} />
-              <button className="all-alerts-button" onClick={() => setSection('Alerts')}>Go to alert center <ArrowRight size={15} /></button>
+              <button className="all-alerts-button" onClick={() => setSection('Disruption Intelligence')}>Open disruption intelligence <ArrowRight size={15} /></button>
             </div>
           </section>
           <section className="bottom-grid">
             <div className="panel shipments-panel">
-              <div className="panel-heading"><div><div className="title-with-info"><h2>Shipment activity</h2><span className="table-count">{shipments.length} records</span></div><p>Your most recent shipments across all routes</p></div><button className="text-link" onClick={() => setSection('Shipments')}>All shipments <ArrowRight size={14} /></button></div>
+              <div className="panel-heading"><div><div className="title-with-info"><h2>Recent shipments</h2><span className="table-count">{shipments.length} records</span></div><p>Current shipment entries across all routes</p></div><button className="text-link" onClick={() => setSection('Shipments')}>All shipments <ArrowRight size={14} /></button></div>
               <ShipmentTable shipments={filteredShipments.slice(0, 4)} onView={id => { setSection('Shipments'); setQuery(id) }} />
             </div>
             <div className="panel inventory-panel">
@@ -494,6 +545,11 @@ function App() {
                 <div className="inventory-cover"><strong>{item.cover ?? '—'}</strong><span>days</span><span className={`mini-status ${item.status.toLowerCase()}`}>{item.status}</span></div>
               </div>)}</div>
               <div className="inventory-foot"><span>{inventoryItems.length} inventory records</span><button onClick={() => setSection('Inventory')}>Review inventory <ArrowRight size={14} /></button></div>
+            </div>
+            <div className="panel supplier-health-panel">
+              <div className="panel-heading"><div><h2>Supplier performance</h2><p>Entered reliability scores</p></div><button className="text-link" onClick={() => setSection('Supplier Network')}>View all <ArrowRight size={14} /></button></div>
+              <SupplierHealthList suppliers={suppliers.slice().sort((a, b) => b.score - a.score).slice(0, 4)} />
+              <div className="supplier-panel-foot">Scores and service rates are workspace entries.</div>
             </div>
           </section>
           <div className="footer-note"><ShieldCheck size={15} /><span>Decision support, not automated action.</span><span className="footer-divider">·</span><span>Risk values are manually entered; no prediction model is connected.</span><button onClick={() => setToast('MongoDB stores records entered in this open workspace.')}>About this workspace</button></div>
@@ -547,6 +603,186 @@ function ShipmentTable({ shipments, onView }: { shipments: Shipment[]; onView: (
       <td><button className="row-action" aria-label={`View ${shipment.id}`} onClick={event => { event.stopPropagation(); onView(shipment.id) }}><ChevronRight size={16} /></button></td>
     </tr>)}
   </tbody></table></div>
+}
+
+function ShipmentStatusChart({ shipments }: { shipments: Shipment[] }) {
+  const statuses: { label: Shipment['status']; className: string }[] = [
+    { label: 'On track', className: 'status-chart-track' },
+    { label: 'At risk', className: 'status-chart-risk' },
+    { label: 'Delayed', className: 'status-chart-delayed' },
+  ]
+  return <div className="status-chart">
+    {statuses.map(status => {
+      const count = shipments.filter(shipment => shipment.status === status.label).length
+      const percentage = shipments.length ? Math.round((count / shipments.length) * 100) : 0
+      return <div className="status-chart-row" key={status.label}>
+        <div className="status-chart-label"><span className={`status-chart-dot ${status.className}`} /><strong>{status.label}</strong><span>{count}</span></div>
+        <div className="status-chart-track"><span className={status.className} style={{ width: `${percentage}%` }} /></div>
+        <small>{percentage}%</small>
+      </div>
+    })}
+    {!shipments.length && <p className="chart-empty">Add shipment records to see current status totals.</p>}
+  </div>
+}
+
+function RoutePanel({ shipments, onView, compact = false }: { shipments: Shipment[]; onView: (id: string) => void; compact?: boolean }) {
+  if (!shipments.length) return <div className="empty-state"><Truck size={21} /><strong>No shipment routes recorded</strong><span>Add route names on the Shipments page.</span></div>
+  const routeNodes = [
+    { x: 70, y: 112 }, { x: 180, y: 42 }, { x: 290, y: 135 }, { x: 405, y: 62 },
+    { x: 520, y: 144 }, { x: 650, y: 58 }, { x: 748, y: 121 }, { x: 350, y: 191 },
+  ]
+  return <div className={`route-panel ${compact ? 'route-panel-compact' : ''}`}>
+    <div className="route-disclaimer"><span className="route-signal"><Activity size={14} /> ROUTE SCHEMATIC</span><span>No coordinates or live GPS feed</span></div>
+    {!compact && <div className="route-map-canvas">
+      <div className="route-map-caption">SIMULATED POSITIONS · ILLUSTRATIVE LAYOUT, NOT GPS</div>
+      <svg viewBox="0 0 800 230" role="img" aria-label="Illustrative shipment route schematic with simulated markers, not GPS positions">
+        <defs><pattern id="route-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#355171" /></pattern></defs>
+        <rect width="800" height="230" rx="12" fill="url(#route-dots)" />
+        {shipments.map((shipment, index) => {
+          const start = routeNodes[index % routeNodes.length]
+          const end = routeNodes[(index + 3) % routeNodes.length]
+          const marker = { x: start.x + (end.x - start.x) * 0.58, y: start.y + (end.y - start.y) * 0.58 }
+          return <g key={shipment.id} className="route-map-shipment" role="button" tabIndex={0} aria-label={`Open ${shipment.id}; simulated marker, not GPS`} onClick={() => onView(shipment.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onView(shipment.id) } }}>
+            <title>{shipment.id}: simulated route marker, not GPS</title>
+            <path className="route-map-line" d={`M ${start.x} ${start.y} Q ${(start.x + end.x) / 2} ${(start.y + end.y) / 2 - 28} ${end.x} ${end.y}`} />
+            <circle className="route-map-hub" cx={start.x} cy={start.y} r="4" />
+            <circle className="route-map-hub" cx={end.x} cy={end.y} r="4" />
+            <circle className={`route-map-pulse map-${shipment.status.toLowerCase().replace(' ', '-')}`} cx={marker.x} cy={marker.y} r="10" />
+            <circle className={`route-map-marker map-${shipment.status.toLowerCase().replace(' ', '-')}`} cx={marker.x} cy={marker.y} r="4" />
+          </g>
+        })}
+      </svg>
+      <div className="route-map-key"><span><i /> Marker positions are simulated for layout only</span><span>Click a route marker to open its shipment record</span></div>
+    </div>}
+    <div className="route-list">{shipments.map(shipment => {
+      const points = shipment.route.split('→').map(point => point.trim())
+      const origin = points[0] || shipment.route
+      const destination = points[1] || 'Destination not recorded'
+      return <article className="route-row" key={shipment.id}>
+        <div className="route-row-main"><span className={`route-status-dot route-${shipment.status.toLowerCase().replace(' ', '-')}`} /><div className="route-row-copy"><strong>{shipment.id}</strong><span>{shipment.carrier}</span></div><span className={`shipment-status status-${shipment.status.toLowerCase().replace(' ', '-')}`}><i />{shipment.status}</span></div>
+        <div className="route-lane"><span className="route-point-label">{origin}</span><div className="route-line"><i /><b /><i /></div><span className="route-point-label">{destination}</span><button className="row-action" aria-label={`Open ${shipment.id}`} onClick={() => onView(shipment.id)}><ChevronRight size={16} /></button></div>
+      </article>
+    })}</div>
+    {!compact && <p className="route-footnote">The line connects the route names entered on each shipment. It does not show a geographic position, progress, or estimated arrival.</p>}
+  </div>
+}
+
+function riskBand(score: number) {
+  if (score >= 75) return 'Critical'
+  if (score >= 50) return 'High'
+  if (score >= 25) return 'Medium'
+  return 'Low'
+}
+
+function RiskMonitorPanel({ shipments, onReview }: { shipments: Shipment[]; onReview: (id: string) => void }) {
+  const bands = ['Low', 'Medium', 'High', 'Critical'] as const
+  return <div className="risk-monitor">
+    <div className="risk-band-grid">{bands.map(band => {
+      const count = shipments.filter(shipment => riskBand(shipment.risk) === band).length
+      return <div className={`risk-band-card band-${band.toLowerCase()}`} key={band}><span>{band} score</span><strong>{count}</strong><small>{band === 'Low' ? '0–24' : band === 'Medium' ? '25–49' : band === 'High' ? '50–74' : '75–100'} / 100</small></div>
+    })}</div>
+    <div className="risk-explainer"><ShieldCheck size={17} /><div><strong>Score bands describe entered values</strong><span>There are no predicted disruption probabilities or recorded cause factors in this workspace. Shipment status is shown as operational context only.</span></div></div>
+    {shipments.length ? <div className="table-scroll"><table className="shipment-table module-table"><thead><tr><th>SHIPMENT</th><th>STATUS</th><th>ENTERED SCORE</th><th>SCORE BAND</th><th>MODEL PROBABILITY</th><th /></tr></thead><tbody>
+      {shipments.slice().sort((a, b) => b.risk - a.risk).map(shipment => <tr key={shipment.id}>
+        <td><div className="shipment-identity"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><span><strong>{shipment.id}</strong><small>{shipment.supplier}</small></span></div></td>
+        <td><span className={`shipment-status status-${shipment.status.toLowerCase().replace(' ', '-')}`}><i />{shipment.status}</span></td>
+        <td><div className="risk-cell"><div className="risk-track"><span style={{ width: `${shipment.risk}%` }} className={shipment.risk >= 75 ? 'risk-high' : shipment.risk >= 50 ? 'risk-medium' : 'risk-low'} /></div><strong>{shipment.risk}/100</strong></div></td>
+        <td><span className={`risk-band-label band-${riskBand(shipment.risk).toLowerCase()}`}>{riskBand(shipment.risk)}</span></td>
+        <td><span className="unavailable-value">Not calculated</span></td>
+        <td><button className="button button-outline button-small" onClick={() => onReview(shipment.id)}>Review</button></td>
+      </tr>)}
+    </tbody></table></div> : <div className="empty-state"><Activity size={21} /><strong>No shipment scores available</strong><span>Add a shipment with an entered risk score to review bands.</span></div>}
+  </div>
+}
+
+function DisruptionPanel({ alerts, inventoryItems, shipments }: { alerts: Alert[]; inventoryItems: InventoryItem[]; shipments: Shipment[] }) {
+  const alertText = alerts.map(alert => `${alert.title} ${alert.description}`.toLowerCase())
+  const categoryCounts = [
+    { name: 'Weather', terms: ['weather', 'storm', 'rain', 'flood', 'hurricane'] },
+    { name: 'Port congestion', terms: ['port', 'congestion', 'harbor', 'vessel'] },
+    { name: 'Traffic delays', terms: ['traffic', 'road closure', 'highway'] },
+    { name: 'Geopolitical', terms: ['geopolitical', 'border', 'sanction', 'conflict'] },
+    { name: 'Supplier disruption', terms: ['supplier disruption', 'supplier outage', 'supplier failure'] },
+  ].map(category => ({ ...category, count: alertText.filter(text => category.terms.some(term => text.includes(term))).length }))
+  const criticalInventory = inventoryItems.filter(item => item.status === 'Critical').length
+  return <div className="disruption-panel">
+    <div className="disruption-category-grid">{categoryCounts.map(category => <article className="disruption-category" key={category.name}><span className="disruption-category-icon"><Cloud size={16} /></span><div><strong>{category.name}</strong><small>{category.count ? `${category.count} matching alert${category.count === 1 ? '' : 's'}` : 'No matching alerts recorded'}</small></div><b>{category.count}</b></article>)}
+      <article className="disruption-category"><span className="disruption-category-icon inventory-icon"><Box size={16} /></span><div><strong>Critical inventory</strong><small>Items currently marked critical</small></div><b>{criticalInventory}</b></article>
+    </div>
+    <div className="disruption-summary"><div><span className="summary-number">{alerts.length}</span><span className="summary-label">recorded alerts</span></div><div><span className="summary-number">{shipments.filter(shipmentNeedsReview).length}</span><span className="summary-label">shipments flagged for review</span></div><p>Shipment status is not treated as a confirmed disruption cause. Category counts use alert text; unmatched causes remain unclassified.</p></div>
+    <AlertList alerts={alerts.slice(0, 5)} onAcknowledge={() => undefined} disabled />
+  </div>
+}
+
+function RecoveryPlannerPanel({ shipments, suppliers, onReview }: { shipments: Shipment[]; suppliers: Supplier[]; onReview: (id: string) => void }) {
+  const candidates = shipments.filter(shipmentNeedsReview).sort((a, b) => b.risk - a.risk)
+  return <div className="recovery-panel">
+    <div className="recovery-note"><Sparkles size={17} /><div><strong>Review candidates from recorded supplier scores</strong><span>Suggestions do not include capacity, live transit, cost, or predicted delay reduction. Confirm details with suppliers before switching.</span></div></div>
+    {!candidates.length ? <div className="empty-state"><ShieldCheck size={21} /><strong>No shipments are currently flagged</strong><span>Shipments marked At risk, Delayed, or with a score of 70+ will appear here.</span></div> : <div className="recovery-list">{candidates.map(shipment => {
+      const alternative = suppliers.filter(supplier => supplier.name !== shipment.supplier).sort((a, b) => b.score - a.score)[0]
+      return <article className="recovery-row" key={shipment.id}>
+        <div className="recovery-shipment"><span className={`supplier-avatar avatar-${shipment.tone}`}>{shipment.initials}</span><div><strong>{shipment.id}</strong><small>{shipment.route} · entered score {shipment.risk}/100</small></div></div>
+        <div className="recovery-suggestion"><span>Recorded-score candidate</span><strong>{alternative?.name ?? 'No alternative supplier recorded'}</strong><small>{alternative ? `Reliability ${alternative.score}/100 · on time ${alternative.onTime}` : 'Add a supplier record to compare alternatives.'}</small></div>
+        <div className="recovery-action"><span>Cost / delay effect unavailable</span><button className="button button-outline button-small" onClick={() => onReview(shipment.id)}>Review shipment</button></div>
+      </article>
+    })}</div>}
+  </div>
+}
+
+function SupplierHealthList({ suppliers }: { suppliers: Supplier[] }) {
+  if (!suppliers.length) return <div className="empty-state"><Users size={21} /><strong>No suppliers recorded</strong><span>Add supplier records to compare entered service values.</span></div>
+  return <div className="supplier-health-list">{suppliers.map(supplier => <div className="supplier-health-row" key={supplier.id}>
+    <span className={`supplier-avatar avatar-${supplier.tone}`}>{supplier.initials}</span><div className="supplier-health-name"><strong>{supplier.name}</strong><small>On time {supplier.onTime} · fulfillment {supplier.fulfillment}</small></div><div className="supplier-score"><strong>{supplier.score}</strong><span>/100</span></div>
+  </div>)}</div>
+}
+
+function AnalyticsPanel({ shipments, inventoryItems, suppliers, onExport }: { shipments: Shipment[]; inventoryItems: InventoryItem[]; suppliers: Supplier[]; onExport: () => void }) {
+  const critical = inventoryItems.filter(item => item.status === 'Critical').length
+  const averageRisk = shipments.length ? Math.round(shipments.reduce((sum, item) => sum + item.risk, 0) / shipments.length) : null
+  return <div className="analytics-panel">
+    <div className="analytics-toolbar"><span className="tool-pill"><Activity size={14} /> CURRENT WORKSPACE RECORDS</span><button className="button button-outline button-small" onClick={onExport}><Download size={14} /> Export JSON report</button></div>
+    <div className="analytics-summary-grid"><div><span>Total shipments</span><strong>{shipments.length}</strong></div><div><span>Average entered risk</span><strong>{averageRisk === null ? '—' : `${averageRisk}/100`}</strong></div><div><span>Suppliers recorded</span><strong>{suppliers.length}</strong></div><div><span>Critical inventory items</span><strong>{critical}</strong></div></div>
+    <div className="analytics-chart-grid"><div className="analytics-chart-card"><div className="panel-heading"><div><h3>Shipment status mix</h3><p>Current shipment records</p></div></div><ShipmentStatusChart shipments={shipments} /></div><div className="analytics-chart-card"><div className="panel-heading"><div><h3>Supplier reliability</h3><p>Entered score, sorted high to low</p></div></div><SupplierHealthList suppliers={suppliers.slice().sort((a, b) => b.score - a.score).slice(0, 5)} /></div></div>
+    <p className="analytics-footnote">No weekly/monthly history, financial impact, or model output is available because those fields are not stored in the current dataset.</p>
+  </div>
+}
+
+function AssistantPanel({ shipments, inventoryItems, suppliers, alerts }: { shipments: Shipment[]; inventoryItems: InventoryItem[]; suppliers: Supplier[]; alerts: Alert[] }) {
+  const [prompt, setPrompt] = useState('')
+  const [messages, setMessages] = useState<{ role: 'assistant' | 'user'; text: string }[]>([
+    { role: 'assistant', text: 'I can summarize shipments, inventory, suppliers, and alerts from this workspace. These responses use simple local rules; no AI model or external data is connected.' },
+  ])
+  function answer(question: string) {
+    const text = question.toLowerCase()
+    if (text.includes('inventory') || text.includes('stock')) {
+      const items = inventoryItems.filter(item => item.status === 'Critical' || item.status === 'Watch')
+      return items.length ? `Items marked Critical or Watch:\n${items.map(item => `• ${item.item} — ${item.status}, ${item.cover ?? 'unknown'} days of cover`).join('\n')}` : 'No inventory items are currently marked Critical or Watch.'
+    }
+    if (text.includes('supplier')) {
+      const ranked = suppliers.slice().sort((a, b) => b.score - a.score).slice(0, 4)
+      return ranked.length ? `Highest entered supplier scores:\n${ranked.map(item => `• ${item.name} — ${item.score}/100; on time ${item.onTime}`).join('\n')}` : 'No supplier records are available.'
+    }
+    if (text.includes('alert') || text.includes('disruption')) {
+      return alerts.length ? `${alerts.length} alert record${alerts.length === 1 ? '' : 's'} in the workspace:\n${alerts.slice(0, 5).map(item => `• ${item.severity}: ${item.title}`).join('\n')}` : 'There are no alert records in the workspace.'
+    }
+    if (text.includes('shipment') || text.includes('delay') || text.includes('risk')) {
+      const review = shipments.filter(shipmentNeedsReview).sort((a, b) => b.risk - a.risk)
+      return review.length ? `${review.length} shipments are flagged by status or entered score:\n${review.slice(0, 5).map(item => `• ${item.id} — ${item.status}, score ${item.risk}/100`).join('\n')}` : 'No shipments are currently flagged by status or entered score.'
+    }
+    return 'Try asking about shipments at risk, inventory stock, supplier scores, or current alerts.'
+  }
+  function submit(question: string) {
+    const value = question.trim()
+    if (!value) return
+    setMessages(current => [...current, { role: 'user', text: value }, { role: 'assistant', text: answer(value) }])
+    setPrompt('')
+  }
+  return <div className="assistant-panel">
+    <div className="assistant-disclaimer"><Sparkles size={16} /><span>Workspace helper · rule-based · current records only</span></div>
+    <div className="assistant-messages" aria-live="polite">{messages.map((message, index) => <div className={`assistant-message message-${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'assistant' ? 'S' : 'You'}</span><p>{message.text}</p></div>)}</div>
+    <div className="assistant-suggestions"><button onClick={() => submit('Which shipments need review?')}>Shipments needing review</button><button onClick={() => submit('Which inventory items are low?')}>Low inventory</button><button onClick={() => submit('Summarize supplier scores')}>Supplier scores</button></div>
+    <form className="assistant-form" onSubmit={event => { event.preventDefault(); submit(prompt) }}><input aria-label="Ask about workspace records" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="Ask about shipments, inventory, suppliers, or alerts" /><button className="button button-dark" type="submit" disabled={!prompt.trim()}><ArrowRight size={16} /><span className="visually-hidden">Send</span></button></form>
+  </div>
 }
 
 function RecordManager({ kind, records, demoMode = false, suppliers = [], shipments = [], inventoryItems = [], returnRequests = [], searchQuery = '', onChanged, onDemoShipmentChange, onDemoInventoryChange, onAcknowledge, onNotify }: {
