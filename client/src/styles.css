@@ -32,7 +32,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, tr:focus-visibl
 .workspace-meta strong { font-size: 11px; font-weight: 600; }
 .workspace-meta small { color: #9eaea5; font-size: 10px; }
 .workspace-switch > svg { color: #a3b2a9; }
-.nav-list { flex: 1; overflow-y: auto; margin: 26px 0 18px; }
+.nav-list { min-height: 0; flex: 1; overflow-y: auto; margin: 26px 0 18px; }
 .nav-group { margin-bottom: 23px; }
 .nav-heading { margin: 0 10px 9px; color: #82948a; font-size: 9px; line-height: 1.4; letter-spacing: 1.15px; font-weight: 700; }
 .nav-item { width: 100%; height: 39px; padding: 0 11px; border: 0; border-radius: 7px; color: #b7c5bd; background: transparent; display: flex; align-items: center; gap: 11px; font-size: 12px; text-align: left; transition: background .15s,color .15s; }
@@ -261,6 +261,17 @@ h1 { margin: 8px 0 5px; color: #25322b; font: 700 25px Manrope,sans-serif; lette
   .command-center-theme .route-map { height: 220px; }
   .command-center-theme .recommendation-row { flex-wrap: wrap; }
   .command-center-theme .recommendation-copy { flex-basis: calc(100% - 40px); }
+}
+@media (max-height: 520px) and (min-width: 701px) {
+  .command-center-theme .sidebar { padding-top: 12px; padding-bottom: 8px; }
+  .command-center-theme .brand-row { margin-bottom: 14px; }
+  .command-center-theme .nav-list { margin: 12px 0; }
+  .command-center-theme .nav-group { margin-bottom: 12px; }
+  .command-center-theme .nav-heading { margin-bottom: 4px; }
+  .command-center-theme .nav-item { height: 32px; }
+  .command-center-theme .plan-card { display: none; }
+  .command-center-theme .support-item { height: 30px; margin-bottom: 4px; }
+  .command-center-theme .profile-row { padding-top: 8px; }
 }
 .olist-benchmark-section { margin-bottom: 22px; }
 .olist-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 12px; }
@@ -505,6 +516,48 @@ h1 { margin: 8px 0 5px; color: #25322b; font: 700 25px Manrope,sans-serif; lette
 .command-center-theme .olist-orders-panel,.command-center-theme .olist-method-panel { border-color: #e2eaf2; }
 .command-center-theme .olist-filter-label,.command-center-theme .olist-pagination { color: #8292a4; }
 .command-center-theme .olist-filter-label select,.command-center-theme .olist-search { border-color: #dbe5ee; color: #456078; }
+.command-center-theme .command-metric-icon.metric-tone-blue { color: #3299ca; background: #eaf6fc; }
+.command-center-theme .command-metric-icon.metric-tone-orange { color: #d18a58; background: #fff3e8; }
+.command-center-theme .command-metric-icon.metric-tone-teal { color: #459ebd; background: #eaf7fa; }
+.command-center-theme .command-metric-icon.metric-tone-violet { color: #6d8bc0; background: #edf4fc; }
+.command-center-theme .mode-breakdown-row { width: 100%; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; }
+.command-center-theme .mode-breakdown-row:hover .operational-signal-label span { color: #278ab9; }
+.command-center-theme .operational-signal-track .signal-0 { background: #de7a68; }
+.command-center-theme .operational-signal-track .signal-1 { background: #e1a747; }
+.command-center-theme .operational-signal-track .signal-2 { background: #5da9d1; }
+.command-center-theme .operational-signal-track .signal-3 { background: #8d9ed1; }
+.command-center-theme .unsupported-data-panel,.command-center-theme .olist-orders-panel { margin-bottom: 14px; padding: 17px; }
+.command-center-theme .unsupported-data-panel > p { margin: 14px 0 0; color: #71859a; font-size: 10px; line-height: 1.6; }
+.command-center-theme .unsupported-data-panel .panel-heading h2 { margin: 9px 0 5px; }
+.command-center-theme .unsupported-data-panel .panel-heading > svg { flex: none; color: #8196aa; }
+.command-center-theme .historical-alert-list { display: grid; }
+.command-center-theme .historical-alert-item { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid #edf2f6; }
+.command-center-theme .historical-alert-item:last-child { border-bottom: 0; }
+.command-center-theme .historical-alert-icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; color: #b75d50; background: #fff0ed; }
+.command-center-theme .historical-alert-item > div { min-width: 0; flex: 1; }
+.command-center-theme .historical-alert-item strong { color: #425970; font-size: 9px; }
+.command-center-theme .historical-alert-item p { margin: 4px 0; color: #71859a; font-size: 9px; }
+.command-center-theme .historical-alert-item small { color: #8998a9; font-size: 8px; }
+.command-center-theme .olist-orders-table { min-width: 1020px; }
+.command-center-theme .olist-orders-table td:first-child strong { color: #298ec3; }
+.command-center-theme .olist-filter-row { flex-wrap: wrap; }
+.command-center-theme .olist-filter-label select { min-width: 105px; }
+.command-center-theme .olist-search:focus-within { border-color: #9dc9df; box-shadow: 0 0 0 2px #eaf6fc; }
+.command-center-theme .olist-search input { color: #456078; }
+.command-center-theme .olist-pagination { border-top: 1px solid #edf2f6; }
+.command-center-theme .olist-definition { border-color: #eef2f6; }
+.command-center-theme .olist-definition > span { color: #8292a4; }
+.command-center-theme .olist-definition > strong { color: #526981; }
+.command-center-theme .olist-data-warning { border-color: #f0e5cf; color: #8e744d; background: #fffaf1; }
+.command-center-theme .olist-data-warning svg { color: #c39b55; }
+@media (max-width: 700px) {
+  .command-center-theme .historical-alert-item { align-items: flex-start; flex-wrap: wrap; }
+  .command-center-theme .historical-alert-item > div { flex-basis: calc(100% - 45px); }
+  .command-center-theme .historical-alert-item .button { margin-left: 42px; }
+  .command-center-theme .olist-filter-label { width: 100%; }
+  .command-center-theme .olist-filter-label select { flex: 1; }
+  .command-center-theme .unsupported-data-panel,.command-center-theme .olist-orders-panel { padding: 14px 12px; }
+}
 .olist-metric-grid { margin-bottom: 14px; }
 .olist-period-value { font-size: clamp(14px,1.8vw,20px) !important; white-space: nowrap; }
 .olist-trend-panel,.olist-history-panel,.olist-orders-panel,.olist-method-panel { padding: 17px; margin-bottom: 14px; }

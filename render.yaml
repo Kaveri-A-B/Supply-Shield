@@ -1,6 +1,15 @@
 services:
   - type: web
     name: supplyshield
+    branch: feature/sap-integration
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+  - type: web
+    name: supplyshield-samples
+    branch: main
     runtime: node
     plan: free
     buildCommand: npm ci --include=dev && npm run build
