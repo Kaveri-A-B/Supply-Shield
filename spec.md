@@ -5,7 +5,7 @@
 **Version:** 1.0  
 **Date:** 2026-10-28  
 **Application stack:** MERN (MongoDB, Express, React, Node.js)  
-**AI integration:** Google Gemini API for grounded, human-readable recommendations and scenario explanations. Predictive risk classification remains based on Logistic Regression and Random Forest.
+**Assistant:** Local, dataset-grounded question answering and deterministic recommendations. No external generative AI provider is used.
 
 ## 1. Overview
 
@@ -31,7 +31,7 @@ Organizations often discover supply disruptions only after a delayed shipment or
 - Replacing an organization's ERP, procurement, warehouse, clinical, or transportation management systems.
 - Automatically placing orders, approving suppliers, changing routes, or making patient-care decisions.
 - Guaranteeing that a shipment will or will not be disrupted.
-- Training a foundation model or using Gemini as the numeric disruption classifier.
+- Training a foundation model or using generative AI as a numeric disruption classifier.
 - Treating synthetic data as evidence of production performance.
 - Requiring Streamlit or any other separate dashboard/web framework. The user-selected web stack is MERN.
 
@@ -56,7 +56,7 @@ Organizations often discover supply disruptions only after a delayed shipment or
 
 ## 3. Scope and product boundaries
 
-The first release supports CSV import and seeded demonstration data, normalized operational records in MongoDB, a scheduled/on-demand Python ML training workflow, a Node/Express API, and a React dashboard. Python is permitted for data preparation and model training/inference as a separately invoked service or batch process; it is not a web framework. The application API and UI remain MERN. Gemini calls are made from the server only, with limited, non-sensitive context and structured output validation.
+The first release supports CSV import and seeded demonstration data, normalized operational records in MongoDB, a scheduled/on-demand Python ML training workflow, a Node/Express API, and a React dashboard. Python is permitted for data preparation and model training/inference as a separately invoked service or batch process; it is not a web framework. The application API and UI remain MERN. Assistant responses are calculated locally from available, non-sensitive dataset fields and must state when requested information is not present.
 
 All suggested schema fields and column names in this document are **proposed**. Implementations must map source data to these fields through a documented import mapping rather than claiming these names exist in a supplied dataset.
 
@@ -140,14 +140,14 @@ Allow an adapter boundary for weather and traffic providers. Persist provider, o
 - Provider-specific fields are mapped into a normalized internal context; raw payload retention is configurable and minimized.
 - External data absence cannot lower an existing risk score or be interpreted as normal weather/traffic.
 
-### FR-09 — Recommendations with Gemini and deterministic fallback (P1)
+### FR-09 — Dataset-grounded assistant and deterministic recommendations (P1)
 
-Gemini may generate concise explanations and action suggestions from a constrained, redacted evidence bundle. Recommendations for alternate suppliers/routes/replenishment must be grounded in available structured records and clearly labeled as suggestions. Deterministic templates/rules must provide a fallback.
+The assistant answers questions and provides concise action suggestions using only the loaded, structured records. Recommendations for alternate suppliers/routes/replenishment must be grounded in available data and clearly labeled as suggestions. Unsupported questions receive an explicit limitation instead of an invented answer.
 
 **Acceptance criteria**
-- Gemini is called only server-side; API keys never reach the browser or logs.
-- Prompt input excludes personal/sensitive data and includes only relevant shipment, inventory, supplier, and normalized context fields.
-- Model output is parsed against a schema (summary, evidence references, proposed actions, uncertainty); invalid or unsupported output is rejected and replaced by fallback text.
+- Assistant questions and dataset records are processed locally; no external AI provider key is needed and no prompt or dataset content is sent to a provider.
+- Personal or sensitive data excluded from the workspace remains unavailable to assistant responses.
+- Answers are calculated from available structured fields; unsupported or unavailable facts are identified rather than fabricated.
 - Recommendations disclose when no qualified alternative supplier/route is present in the data and do not fabricate entities, prices, capacity, or lead times.
 - Users retain control; no recommendation triggers a transaction.
 
@@ -319,9 +319,9 @@ These are starting values, not guarantees of optimality. Tune only with training
 - Probability thresholds are configurable and distinct from classifier's default class threshold. If probability calibration is used, fit calibration on validation data, never the final test set.
 - Persist metrics, model artifact, preprocessing artifact, data version/hash, selected threshold, training time, and software versions. Never retrain silently in a user session.
 
-### Gemini boundary
+### Assistant boundary
 
-Gemini is for natural-language explanation and recommendation drafting only. It does not supply the disruption label or risk probability. Risk probabilities come from the selected scikit-learn pipeline; rules and inventory formulas remain deterministic. Cache only safe, non-sensitive responses where justified, and preserve the evidence used to generate recommendations.
+The assistant provides local summaries and recommendations only. It does not supply a disruption label or risk probability. Risk probabilities come from the selected scikit-learn pipeline; rules and inventory formulas remain deterministic. Responses must be traceable to available evidence and must not invent facts.
 
 ## 9. Alerts and recommendations
 
@@ -333,7 +333,7 @@ Gemini is for natural-language explanation and recommendation drafting only. It 
 | Medium | Moderate risk; stock projected below safety stock within replenishment window; supplier score <70 | Reason, evidence, likely time horizon, monitoring or planning action |
 | Low / informational | Non-urgent context such as stale provider data or a low risk trend | Source/status and follow-up needed |
 
-Suggested action mapping (proposed): high shipment risk → confirm carrier status, assess alternate route/supplier, and review expediting options; shortage risk → verify demand and inbound date, then review replenishment or allocation; supplier risk → validate evidence and compare qualified alternatives; weather/traffic risk → check provider freshness and review route contingency. Gemini may improve concise wording but cannot invent actions unsupported by records.
+Suggested action mapping (proposed): high shipment risk → confirm carrier status, assess alternate route/supplier, and review expediting options; shortage risk → verify demand and inbound date, then review replenishment or allocation; supplier risk → validate evidence and compare qualified alternatives; weather/traffic risk → check provider freshness and review route contingency. Recommendations must use available evidence and cannot invent actions unsupported by records.
 
 ## 10. External integration and fallback contract
 
@@ -388,7 +388,7 @@ flowchart LR
   ADAPTER --> RULES
   RULES --> ALERTS[Alert and recommendation service]
   ML --> ALERTS
-  ALERTS --> GEMINI[Gemini: constrained explanation/recommendation]
+  ALERTS --> ASSISTANT[Local dataset-grounded assistant]
   ALERTS --> API[Node.js / Express API]
   DB --> API
   API --> REACT[React MERN dashboard]
@@ -397,12 +397,12 @@ flowchart LR
 
 ### Components and boundaries
 
-- **React client:** presentation, filtering, user interaction, input validation for usability. No provider or Gemini secrets.
-- **Node.js/Express API:** authentication/authorization boundary, request validation, domain orchestration, Gemini calls, audit writes, and MongoDB access.
+- **React client:** presentation, filtering, user interaction, input validation for usability, and local dataset-grounded assistant answers. No provider secrets.
+- **Node.js/Express API:** authentication/authorization boundary, request validation, domain orchestration, audit writes, and MongoDB access.
 - **MongoDB:** operational records, normalized imports, alerts, configuration, audit metadata, and model registry metadata. Large model binaries may use deployment artifact storage; MongoDB stores references and hashes.
 - **Python ML package/process:** reproducible preprocessing, training, evaluation, and inference for required scikit-learn models. It may be a batch process or a separately deployed internal service; do not introduce Flask or another web framework. If synchronous inference is needed, use an internal worker/CLI boundary or a narrowly defined service using the existing Node API integration strategy.
 - **External adapters:** provider-specific weather/traffic access, normalized responses, timeout/fallback behavior.
-- **Gemini:** server-side generation of constrained prose only; output must be validated and tied to evidence references.
+- **Dataset assistant:** local deterministic calculations and evidence-based answers; external AI services are not used.
 
 ### API boundary (proposed REST contract)
 
@@ -413,8 +413,8 @@ Express routes are versioned under `/api/v1`. Minimum resource groups: `/shipmen
 - Authenticate users for non-demo deployments; authorize read/write/import/configuration actions by role.
 - Validate and sanitize uploaded files, enforce size/row limits, reject executable content, and guard against injection in UI rendering and database queries.
 - Use TLS in transit, managed encryption at rest, least-privilege database credentials, and secret manager/environment configuration.
-- Never expose Gemini, database, or weather/traffic credentials to the client. Redact secrets and sensitive payloads from logs.
-- Minimize data sent to Gemini; do not send patient identifiers or personal data. For hospital scenarios, treat item/stock data as operationally sensitive and apply organization retention/access policy.
+- Never expose database or weather/traffic credentials to the client. Redact secrets and sensitive payloads from logs.
+- Assistant questions are evaluated locally; do not send personal data or dataset content to an external AI service. For hospital scenarios, treat item/stock data as operationally sensitive and apply organization retention/access policy.
 - Define retention and deletion rules for imported files, normalized records, audit events, and provider payloads before real deployment.
 - Provide audit trail for imports, alert actions, model version changes, and configuration edits.
 - Add rate limits and request validation to API endpoints; protect state-changing actions against CSRF where cookie auth is used.
@@ -425,13 +425,13 @@ Express routes are versioned under `/api/v1`. Minimum resource groups: `/shipmen
 | Area | Requirement |
 |---|---|
 | Performance | For demo-scale data (up to 10,000 shipments and 10,000 inventory rows), overview and filtered tables should load within 3 seconds at p95 on the target demo environment, excluding cold start and third-party latency. |
-| Reliability | Core dashboard and deterministic rules continue when Gemini or external providers fail. Model unavailability degrades to rule-only results with explicit labeling. |
+| Reliability | Core dashboard and local assistant continue without generative AI or external providers. Model unavailability degrades to rule-only results with explicit labeling. |
 | Usability | Common workflow (find a high-risk item, inspect evidence, acknowledge alert) should be completable without documentation. Labels distinguish probability, score, and measured operational facts. |
 | Accessibility | Target WCAG 2.1 AA for primary flows: keyboard access, visible focus, semantic labels, contrast, and non-color risk communication. |
 | Security | No secrets in client bundle or repository; server validates all untrusted inputs; authorization enforced server-side. |
 | Maintainability | Separate domain rules, provider adapters, API handlers, UI components, and ML pipeline; typed/validated API contracts and documented environment variables. |
 | Reproducibility | Fixed seeds and versioned dataset/split/config for training; preserve model and preprocessing versions with metrics. |
-| Observability | Structured logs, request IDs, health/readiness status, import failures, provider health, Gemini failures, and model version availability; exclude sensitive values. |
+| Observability | Structured logs, request IDs, health/readiness status, import failures, provider health, and model version availability; exclude sensitive values. |
 | Portability | Local development and target deployment use documented environment variables and repeatable setup; no generated logo filesystem dependency. |
 
 ## 16. Proposed project structure
@@ -445,7 +445,7 @@ supplyshield/
   server/                         # Node.js + Express API
     src/
       config/ middleware/ routes/ controllers/ services/ models/ validators/
-      integrations/               # Gemini, weather, traffic adapters
+      integrations/               # Weather and traffic adapters
       tests/
   ml/                              # Python data/ML package (not a web app)
     src/supplyshield_ml/
@@ -469,22 +469,22 @@ supplyshield/
 - **Express + Node.js** for the API and server-side integrations.
 - **React** for the dashboard UI.
 - **Python, pandas, scikit-learn, joblib** for data preprocessing and the required classifiers.
-- **Google Gemini API** through the official supported SDK/client selected during implementation; pin and document its version.
+- **Local dataset assistant** using transparent deterministic calculations; no external generative AI SDK or provider credentials.
 - CSV parsing/validation, schema validation, secure authentication, and charting libraries selected by the development team and pinned in lockfiles.
 - Pillow (or equivalent pinned image library) for in-memory PNG/ICO generation when not using a pure SVG/browser conversion path.
 
 ### Dependency policy
 
-Maintain separate client, server, and ML dependency manifests. Pin compatible versions, commit lockfiles, scan dependencies in CI, and document provider SDK changes. Do not add Flask or another web framework. Do not use Gemini as an excuse to omit or replace the specified Logistic Regression and Random Forest comparison.
+Maintain separate client, server, and ML dependency manifests. Pin compatible versions, commit lockfiles, scan dependencies in CI, and document provider SDK changes. Do not add Flask or another web framework or replace the specified Logistic Regression and Random Forest comparison.
 
 ## 18. Environment and deployment
 
 - Local setup: install supported Node.js and Python versions, start MongoDB (local or container), install locked dependencies, copy `.env.example` to a private environment file, seed synthetic data, run API/client, and run the ML training command.
-- Required configuration names (proposed): `MONGODB_URI`, `SESSION_SECRET` or auth-provider settings, `GEMINI_API_KEY`, `WEATHER_API_KEY`, `TRAFFIC_API_KEY`, `CLIENT_ORIGIN`, `MODEL_ARTIFACT_URI`, `APP_ENV`. Never commit real values.
+- Required configuration names (proposed): `MONGODB_URI`, `SESSION_SECRET` or auth-provider settings, `WEATHER_API_KEY`, `TRAFFIC_API_KEY`, `CLIENT_ORIGIN`, `MODEL_ARTIFACT_URI`, `APP_ENV`. Never commit real values.
 - Deployment: deploy React static assets and Node/Express API to a supported hosting platform; use managed MongoDB and secret storage. Deploy ML artifact/worker in an environment compatible with Python dependencies. Streamlit Community Cloud is not applicable to this MERN architecture.
 - Configure CORS narrowly, HTTPS, health checks, database backups, logs/monitoring, and environment-specific seeds.
 - Demo deployment must clearly identify synthetic data and provide a no-provider mode.
-- Post-deployment verification: login/role access, API health, sample data, model metrics/inference, external-provider fallback, Gemini fallback, logo preview and PNG/SVG/ICO downloads, header/sidebar branding, favicon behavior, and mobile/tablet layout.
+- Post-deployment verification: login/role access, API health, sample data, model metrics/inference, external-provider fallback, local assistant answers, logo preview and PNG/SVG/ICO downloads, header/sidebar branding, favicon behavior, and mobile/tablet layout.
 
 ## 19. Testing and validation strategy
 
@@ -494,10 +494,10 @@ Testing is required as part of delivery. Use appropriate unit, integration, UI, 
 - **Rule tests:** late shipment, projected shortage, inbound timing, supplier score components, minimum sample handling, threshold boundaries, severity precedence.
 - **ML tests:** train/test leakage checks, preprocessing consistency, unseen categories, metric computation, positive class mapping, artifact load, missing artifact fallback.
 - **API tests:** authentication/authorization, validation, pagination, alert lifecycle/audit, error envelopes, rate limits, secret redaction.
-- **Integration tests:** MongoDB repository flows, provider timeout/stale/no-coverage behavior, Gemini malformed/unsupported output fallback.
+- **Integration tests:** MongoDB repository flows, provider timeout/stale/no-coverage behavior, and local assistant answers for supported and unsupported questions.
 - **UI tests:** loading/error/empty states, filters, accessible risk labels, alert actions, scenario non-persistence, responsive layout.
 - **Logo tests:** selected options reflected in generated output; valid PNG/SVG/ICO bytes and MIME types; no persistent file creation; default fallback on failure; header/sidebar/favicon verification.
-- **End-to-end scenarios:** baseline; delayed high-risk shipment; critical medicine demand spike; supplier failure; weather/traffic outage; stale data; missing ML artifact; Gemini outage; low sample supplier; invalid import.
+- **End-to-end scenarios:** baseline; delayed high-risk shipment; critical medicine demand spike; supplier failure; weather/traffic outage; stale data; missing ML artifact; unsupported assistant question; low sample supplier; invalid import.
 - **Model acceptance:** report test metrics and confusion matrix, inspect false negatives/positives with stakeholders, and document that demo metrics do not establish real-world performance.
 
 ## 20. Phased implementation plan (11 steps)
@@ -510,7 +510,7 @@ Testing is required as part of delivery. Use appropriate unit, integration, UI, 
 | 4 | Basic rules | Tested late-delivery, low-stock, and supplier-issue rules with clear evidence. |
 | 5 | Train/evaluate ML | Logistic Regression and Random Forest evaluated on same held-out set; selection rule and model artifact recorded. |
 | 6 | Build MERN dashboard | React UI, Express API, MongoDB persistence, core pages, filters, and loading/error states. |
-| 7 | Add scores/alerts/recommendations | Risk display, alert lifecycle, deterministic actions, Gemini explanation path, and fallback behavior. |
+| 7 | Add scores/alerts/recommendations | Risk display, alert lifecycle, deterministic actions, local dataset assistant, and explicit unsupported-data behavior. |
 | 8 | Implement simulation | Supplier failure, delivery delay, demand spike inputs and read-only before/after results. |
 | 9 | Add logo feature | In-memory generation, preview, PNG/SVG/ICO downloads, app branding, favicon verification. |
 | 10 | Test scenarios | Automated and manual scenario matrix passes; defects and limitations recorded. |
@@ -520,18 +520,18 @@ Phases may overlap when dependencies permit, but later work must not obscure inc
 
 ## 21. Demo and presentation plan
 
-Demonstrate: (1) overview of seeded synthetic operation; (2) shipment with elevated disruption risk and inspected evidence; (3) hospital medicine inventory projected to fall below safety stock before expected replenishment; (4) supplier comparison with sample size; (5) alert acknowledgement; (6) one what-if delay or demand-spike scenario; (7) provider/Gemini outage fallback; (8) logo customization and three downloads. Explain model metrics, label limitations, synthetic data, and that recommendations require human review. Avoid presenting sample metrics as proof of production efficacy.
+Demonstrate: (1) overview of seeded synthetic operation; (2) shipment with elevated disruption risk and inspected evidence; (3) hospital medicine inventory projected to fall below safety stock before expected replenishment; (4) supplier comparison with sample size; (5) alert acknowledgement; (6) one what-if delay or demand-spike scenario; (7) local assistant answers and an unsupported-question limitation; (8) logo customization and three downloads. Explain model metrics, label limitations, synthetic data, and that recommendations require human review. Avoid presenting sample metrics as proof of production efficacy.
 
 ## 22. Risks, assumptions, and limitations
 
 ### Assumptions
 
-- The user-selected application stack is MERN and the AI service is Gemini. The earlier Streamlit-only constraint is superseded by this stack change.
+- The user-selected application stack is MERN; assistant answers are local and dataset-grounded. The earlier Streamlit-only constraint is superseded by this stack change.
 - Python remains acceptable for the specified scikit-learn ML pipeline and image conversion; it is not used as a web framework.
 - No real dataset is guaranteed. A clearly labeled synthetic dataset may be created for development and demonstration.
 - Organizations will provide disruption labels, criticality rules, inventory units, demand semantics, and operational thresholds before production use.
 - Weather and traffic providers will be selected after geography, cost, licensing, and availability are known.
-- Gemini is optional at runtime; deterministic recommendations must remain available.
+- External generative AI is not used; deterministic, dataset-grounded recommendations remain available.
 
 ### Risks and mitigations
 
@@ -542,14 +542,14 @@ Demonstrate: (1) overview of seeded synthetic operation; (2) shipment with eleva
 | Synthetic data mistaken for real performance | Persistent demo labeling and explicit presentation disclosure. |
 | False negatives or alarm fatigue | Tune thresholds with users, display evidence/uncertainty, deduplicate alerts, and keep human review. |
 | Stale/missing provider data | Freshness metadata, explicit fallback state, no “missing means safe” behavior. |
-| Gemini hallucination or outage | Constrained context/output schema, evidence validation, deterministic fallback, no autonomous action. |
+| Unsupported assistant answer | Calculate only from available fields and identify missing evidence; do not fabricate facts or take autonomous action. |
 | Incompatible schema semantics/units | Import mapping and validation report; require unit and scale documentation. |
 | Sensitive operational data exposure | Data minimization, access control, secret handling, retention policy, and redacted logs. |
 | MERN/Python deployment complexity | Separate manifests and reproducible ML artifact interface; verify build/deploy contract early. |
 
 ### Limitations
 
-Predictions depend on data coverage, label quality, and changing operating conditions. Supplier scores may be incomparable when sample sizes or definitions differ. Weather/traffic data may lack route coverage or freshness. Gemini output may be unavailable or unsuitable and must be reviewed. Inventory projections are simplified and do not replace planning systems.
+Predictions depend on data coverage, label quality, and changing operating conditions. Supplier scores may be incomparable when sample sizes or definitions differ. Weather/traffic data may lack route coverage or freshness. Local assistant answers are limited to the loaded dataset and must not be interpreted as facts outside it. Inventory projections are simplified and do not replace planning systems.
 
 ## 23. Definition of Ready
 
@@ -569,8 +569,8 @@ A feature is done when its acceptance criteria pass; relevant automated checks a
 - [ ] Model selection, limitations, version, probability, and rule-only fallback are visible and auditable.
 - [ ] Inventory coverage and supplier scores expose formulas, evidence, and insufficient-data handling.
 - [ ] Alerts have severity, evidence, deduplication, and an acknowledged/resolved lifecycle.
-- [ ] Weather/traffic and Gemini failures fall back without breaking core workflows or implying safe conditions.
-- [ ] Gemini generates only constrained, validated explanatory/recommendation text; no autonomous operations occur.
+- [ ] Weather/traffic provider failures fall back without breaking core workflows or implying safe conditions.
+- [ ] Assistant responses use only available dataset evidence and do not trigger autonomous operations.
 - [ ] All three requested what-if scenarios run read-only and show assumptions and before/after results.
 - [ ] Logo is generated in memory, previewed, downloaded as PNG/SVG/ICO, and displayed in the app branding.
 - [ ] Security, privacy, API, environment, dependency, deployment, and rollback/configuration expectations are documented.

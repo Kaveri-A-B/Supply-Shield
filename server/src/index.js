@@ -2,19 +2,72 @@ import { fileURLToPath } from 'node:url'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
+import rateLimit from 'express-rate-limit'
+import helmet from 'helmet'
 import mongoose from 'mongoose'
 import { Alert, InventoryItem, ReturnRequest, Shipment, Supplier, calculateInventoryCoverage, calculateReturnRating } from './models.js'
+import { createAfterShipTracking, getAfterShipTracking, IntegrationError } from './integrations.js'
+import { createApiTokenAuthorization, createWriteAuthorization } from './writeAuthorization.js'
 
 dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) })
 
+const environment = process.env.NODE_ENV || 'development'
 const port = Number(process.env.PORT) || 4000
-const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
+const configuredOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',')
+  .map(value => value.trim())
+  .filter(Boolean)
+function isAllowedDevelopmentOrigin(origin) {
+  if (environment === 'production') return false
+  try {
+    const url = new URL(origin)
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)
+  } catch {
+    return false
+  }
+}
 const clientDist = fileURLToPath(new URL('../../client/dist', import.meta.url))
 const app = express()
 app.set('trust proxy', 1)
 app.disable('x-powered-by')
-app.use(cors({ origin: clientOrigin, credentials: true }))
-app.use(express.json({ limit: '100kb' }))
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'same-site' },
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  frameguard: { action: 'deny' },
+  noSniff: true,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: environment === 'production',
+}))
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || configuredOrigins.includes(origin) || isAllowedDevelopmentOrigin(origin)) {
+      callback(null, true)
+      return
+    }
+    callback(new Error('Origin is not allowed by CORS.'))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}))
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: environment === 'production' ? 200 : 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait a moment and retry.' },
+}))
+app.use('/api', createWriteAuthorization(process.env.API_WRITE_TOKEN))
+const requireApiToken = createApiTokenAuthorization(process.env.API_WRITE_TOKEN)
+app.use((request, response, next) => {
+  response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  response.setHeader('Pragma', 'no-cache')
+  response.setHeader('Expires', '0')
+  next()
+})
+app.use(express.json({ limit: '100kb', strict: true }))
+app.use(express.urlencoded({ extended: true, limit: '100kb' }))
 
 function serializeShipment(document) {
   return {
@@ -112,7 +165,7 @@ function sendDatabaseError(error, _request, response, _next) {
     response.status(409).json({ error: 'A record with that identifier already exists.' })
     return
   }
-  console.error('Unhandled API error:', error.message)
+  console.error('Unhandled API error.')
   response.status(500).json({ error: 'An unexpected server error occurred.' })
 }
 
@@ -124,8 +177,20 @@ app.get('/api/health', (_request, response) => {
   })
 })
 
+app.get('/api/integrations/status', (_request, response) => {
+  response.json({
+    aftership: Boolean(process.env.AFTERSHIP_API_KEY),
+    writes: Buffer.byteLength(process.env.API_WRITE_TOKEN ?? '', 'utf8') >= 32,
+  })
+})
+
 app.use('/api', (request, response, next) => {
-  if (request.path === '/health') {
+  if (
+    request.path === '/health'
+    || request.path === '/integrations/status'
+    || request.path === '/tracking'
+    || request.path.startsWith('/tracking/')
+  ) {
     next()
     return
   }
@@ -134,6 +199,65 @@ app.use('/api', (request, response, next) => {
     return
   }
   next()
+})
+
+function validateTrackingNumber(value) {
+  return typeof value === 'string'
+    && value.trim().length >= 4
+    && value.trim().length <= 100
+    && /^[A-Za-z0-9._/-]+$/.test(value.trim())
+}
+
+app.post('/api/tracking', async (request, response) => {
+  const issue = validateFields(request.body, ['trackingNumber', 'carrier'], ['trackingNumber'])
+  if (issue) return response.status(400).json({ error: issue })
+  if (!validateTrackingNumber(request.body.trackingNumber)) {
+    return response.status(400).json({ error: 'Tracking number must contain 4 to 100 letters, digits, dots, underscores, slashes, or hyphens.' })
+  }
+  if (request.body.carrier !== undefined && (
+    typeof request.body.carrier !== 'string'
+    || !/^[a-z0-9][a-z0-9-]{0,80}$/i.test(request.body.carrier.trim())
+  )) {
+    return response.status(400).json({ error: 'Carrier must be a valid AfterShip slug.' })
+  }
+
+  try {
+    const tracking = await createAfterShipTracking({
+      apiKey: process.env.AFTERSHIP_API_KEY,
+      apiVersion: process.env.AFTERSHIP_API_VERSION || '2026-07',
+      trackingNumber: request.body.trackingNumber.trim(),
+      carrier: request.body.carrier?.trim().toLowerCase() || undefined,
+    })
+    response.status(201).json(tracking)
+  } catch (error) {
+    if (error instanceof IntegrationError) {
+      response.status(error.status).json({ error: error.message })
+      return
+    }
+    console.error('AfterShip create-tracking request failed.')
+    response.status(502).json({ error: 'AfterShip could not be reached. Check the server connection and try again.' })
+  }
+})
+
+app.get('/api/tracking/:id', requireApiToken, async (request, response) => {
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(request.params.id)) {
+    return response.status(400).json({ error: 'Tracking ID is invalid.' })
+  }
+
+  try {
+    response.json(await getAfterShipTracking({
+      apiKey: process.env.AFTERSHIP_API_KEY,
+      apiVersion: process.env.AFTERSHIP_API_VERSION || '2026-07',
+      id: request.params.id,
+    }))
+  } catch (error) {
+    if (error instanceof IntegrationError) {
+      response.status(error.status).json({ error: error.message })
+      return
+    }
+    console.error('AfterShip get-tracking request failed.')
+    response.status(502).json({ error: 'AfterShip could not be reached. Check the server connection and try again.' })
+  }
 })
 
 app.get('/api/dashboard', async (_request, response, next) => {
@@ -452,7 +576,15 @@ app.delete('/api/alerts/:id', async (request, response, next) => {
 })
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'API route not found.' }))
-app.use(express.static(clientDist))
+app.use(express.static(clientDist, {
+  index: false,
+  maxAge: '1h',
+  setHeaders(response, path) {
+    if (path.endsWith('.html')) {
+      response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    }
+  },
+}))
 app.get('*', (_request, response) => {
   response.sendFile(fileURLToPath(new URL('../../client/dist/index.html', import.meta.url)))
 })
@@ -468,4 +600,8 @@ if (!process.env.MONGODB_URI) {
   void mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('MongoDB is connected.'))
     .catch(error => console.error('MongoDB connection failed:', error.message))
+}
+
+if (Buffer.byteLength(process.env.API_WRITE_TOKEN ?? '', 'utf8') < 32) {
+  console.warn('API_WRITE_TOKEN is missing or too short; API write endpoints are disabled.')
 }

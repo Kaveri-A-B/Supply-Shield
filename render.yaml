@@ -7,6 +7,21 @@ services:
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: API_WRITE_TOKEN
+        sync: false
+      - key: AFTERSHIP_API_KEY
+        sync: false
+      - key: AFTERSHIP_API_VERSION
+        value: 2026-07
   - type: web
     name: supplyshield-samples
     branch: main
@@ -15,3 +30,18 @@ services:
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: API_WRITE_TOKEN
+        sync: false
+      - key: AFTERSHIP_API_KEY
+        sync: false
+      - key: AFTERSHIP_API_VERSION
+        value: 2026-07
