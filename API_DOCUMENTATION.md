@@ -10,7 +10,21 @@ The dataset assistant runs locally in the dashboard and does not send prompts or
 
 ### `GET /api/integrations/status`
 
-Returns whether AfterShip and API write authorization are configured. It does not expose credentials.
+Returns whether AfterShip, SAP, SAP Integration Suite routing, and API write authorization are configured. SAP flags indicate valid server-side configuration, not a successful live connection. It does not expose credentials.
+
+### `GET /api/sap/:resource`
+
+Reads a limited result set from SAP S/4HANA OData using server-side OAuth 2.0 client credentials. Requires `Authorization: Bearer <API_WRITE_TOKEN>`. Supported read-only resources are `suppliers`, `products`, `purchaseOrders`, and `stock`. The optional `top` query parameter defaults to 50 and is limited to 1–100 records. Returned fields are allow-listed; unrelated SAP fields are discarded.
+
+Choose one SAP read path and configure these values on the server only:
+
+- `SAP_ODATA_BASE_URL`: HTTPS OData service root, usually ending in `/sap/opu/odata/sap`
+- `SAP_INTEGRATION_SUITE_BASE_URL`: optional HTTPS root URL for a deployed Integration Suite flow; when set, it takes precedence over the direct OData URL
+- `SAP_TOKEN_URL`: HTTPS OAuth token endpoint provided by the SAP API configuration
+- `SAP_CLIENT_ID` and `SAP_CLIENT_SECRET`: OAuth client credentials
+- `SAP_OAUTH_SCOPE`: optional scope, only if required by the SAP OAuth client
+
+For direct access, the SAP system must have the corresponding read APIs and OAuth client credentials enabled. For Integration Suite, the deployed flow must expose `GET /suppliers`, `/products`, `/purchaseOrders`, and `/stock`, accept a `top` query parameter, call the corresponding S/4HANA API, and return a JSON OData response (`value` or `d.results` array). A subscription alone is not a deployed flow or a live connection. This endpoint is read-only and does not create, update, or delete SAP data. A trial account may not permit the administrative communication configuration required to issue API credentials.
 
 ### `POST /api/tracking`
 

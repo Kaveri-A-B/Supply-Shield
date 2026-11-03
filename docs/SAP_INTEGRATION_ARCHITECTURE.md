@@ -1,6 +1,6 @@
 # SupplyShield SAP Integration Architecture
 
-**Status:** Proposed only. No SAP tenant or connection is configured. The design follows the requested phase order and preserves the current application until an explicit data migration decision.
+**Status:** The server has a tested, read-only S/4HANA OData connector and can route requests through a configured Integration Suite HTTP flow. The BTP Integration Suite trial subscription is active. No Integration Suite flow, API credentials, or live S/4HANA connection has been configured or verified.
 
 ## Current system boundary
 
@@ -10,9 +10,11 @@ flowchart LR
   Express -->|Mongoose| Mongo[(MongoDB)]
   Express -->|serves client/dist in deployment| Browser
   Browser -. synthetic sample records when DB records unavailable .-> Demo[Client demo workspace]
+  Express -. configured only; not live .-> S4[SAP S/4HANA OData]
+  Express -. optional configured flow; not live .-> Suite[SAP Integration Suite]
 ```
 
-The current system has no ML service, SAP client, authentication middleware, or external logistics connector. Risk values are manually entered. Current operational persistence is MongoDB.
+No live SAP, ML, or external logistics connectivity is active. A read-only SAP server connector and an optional Integration Suite route are implemented but require tenant-issued OAuth configuration; risk values remain manually entered. Current operational persistence is MongoDB.
 
 ## Target architecture by phase
 
@@ -57,7 +59,7 @@ Approved SupplyShield data → validated field/key-figure mapping → isolated I
 
 ### Phase 5 — SAP Integration Suite
 
-Integration Suite flows/API management orchestrate only approved system-to-system paths. Obtain real partner API specifications, authentication requirements, schemas, and tenant-specific endpoints before configuring any adapter. Use mock tests until then; never substitute invented URLs for actual endpoints.
+The server can route read-only requests through an Integration Suite HTTP endpoint when `SAP_INTEGRATION_SUITE_BASE_URL` and tenant-issued OAuth client-credentials settings are configured. Its expected contract is `GET /suppliers`, `/products`, `/purchaseOrders`, and `/stock` with a `top` query parameter and OData-compatible JSON responses. The trial subscription is active, but no flow has been deployed. Obtain the actual S/4HANA communication arrangement, service key, endpoint URL, and API schemas before testing; never substitute invented URLs or credentials.
 
 ## Security and operations boundaries
 

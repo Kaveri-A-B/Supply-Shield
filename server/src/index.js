@@ -7,6 +7,7 @@ import helmet from 'helmet'
 import mongoose from 'mongoose'
 import { Alert, InventoryItem, ReturnRequest, Shipment, Supplier, calculateInventoryCoverage, calculateReturnRating } from './models.js'
 import { createAfterShipTracking, getAfterShipTracking, IntegrationError } from './integrations.js'
+import { createSapClient, SapIntegrationError } from './sapIntegration.js'
 import { createApiTokenAuthorization, createWriteAuthorization } from './writeAuthorization.js'
 
 dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) })
@@ -60,6 +61,14 @@ app.use(rateLimit({
 }))
 app.use('/api', createWriteAuthorization(process.env.API_WRITE_TOKEN))
 const requireApiToken = createApiTokenAuthorization(process.env.API_WRITE_TOKEN)
+const sapClient = createSapClient({
+  baseUrl: process.env.SAP_ODATA_BASE_URL,
+  integrationSuiteBaseUrl: process.env.SAP_INTEGRATION_SUITE_BASE_URL,
+  tokenUrl: process.env.SAP_TOKEN_URL,
+  clientId: process.env.SAP_CLIENT_ID,
+  clientSecret: process.env.SAP_CLIENT_SECRET,
+  scope: process.env.SAP_OAUTH_SCOPE,
+})
 app.use((request, response, next) => {
   response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
   response.setHeader('Pragma', 'no-cache')
@@ -180,6 +189,8 @@ app.get('/api/health', (_request, response) => {
 app.get('/api/integrations/status', (_request, response) => {
   response.json({
     aftership: Boolean(process.env.AFTERSHIP_API_KEY),
+    sap: sapClient.isConfigured(),
+    sapIntegrationSuite: sapClient.usesIntegrationSuite(),
     writes: Buffer.byteLength(process.env.API_WRITE_TOKEN ?? '', 'utf8') >= 32,
   })
 })
@@ -190,6 +201,8 @@ app.use('/api', (request, response, next) => {
     || request.path === '/integrations/status'
     || request.path === '/tracking'
     || request.path.startsWith('/tracking/')
+    || request.path === '/sap'
+    || request.path.startsWith('/sap/')
   ) {
     next()
     return
@@ -257,6 +270,20 @@ app.get('/api/tracking/:id', requireApiToken, async (request, response) => {
     }
     console.error('AfterShip get-tracking request failed.')
     response.status(502).json({ error: 'AfterShip could not be reached. Check the server connection and try again.' })
+  }
+})
+
+app.get('/api/sap/:resource', requireApiToken, async (request, response) => {
+  const top = request.query.top === undefined ? 50 : Number(request.query.top)
+  try {
+    response.json(await sapClient.getResource(request.params.resource, top))
+  } catch (error) {
+    if (error instanceof SapIntegrationError) {
+      response.status(error.status).json({ error: error.message })
+      return
+    }
+    console.error('SAP OData request failed.')
+    response.status(502).json({ error: 'SAP OData could not complete the request.' })
   }
 })
 

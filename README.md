@@ -55,12 +55,13 @@ Implemented:
 - Privacy-filtered dataset import and validation
 - Rule-based stock/supplier alerts and illustrative what-if calculations
 - Optional AfterShip tracking for real user-provided tracking numbers
+- Optional read-only SAP S/4HANA OData integration for suppliers, products, purchase orders, and stock, with optional SAP Integration Suite routing
 - MongoDB-backed API layer and schema validation
 
 Planned or environment-dependent:
 
 - Live database-backed operational workflows
-- Full SAP or ERP data integration
+- Live SAP integration requires server-side OAuth credentials and enabled OData APIs; Integration Suite routing also requires a deployed flow
 - User authentication and role-based access control
 - Production analytics tracking and advanced monitoring
 

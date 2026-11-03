@@ -1,6 +1,6 @@
 # SAP Integration Status
 
-**Last reviewed:** 2026-10-30
+**Last reviewed:** 2026-11-02
 
 | Component | Status | Evidence / blocker |
 |---|---|---|
@@ -9,7 +9,7 @@
 | SAP HANA Cloud | PENDING CONFIGURATION | MongoDB is the only configured database; no HANA client, connection service, schema, or tenant configuration found |
 | SAP Generative AI Hub | PENDING CONFIGURATION | No assistant/service integration found; AI Core Extended plan, Hub entitlement, credentials, and deployment not verified |
 | SAP IBP | PENDING CONFIGURATION | No adapter or tenant configuration found; mapping and planning-area/key-figure contract not supplied |
-| SAP Integration Suite | PENDING CONFIGURATION | No flow, API, endpoint, or tenant configuration found |
+| SAP Integration Suite | TRIAL SUBSCRIBED; FLOW PENDING | BTP trial subscription was created successfully. No deployed flow, endpoint, service credentials, or verified S/4HANA connection yet. The server connector now supports routing through a configured Integration Suite HTTP flow. |
 
 ## Ground rules for status
 
@@ -28,8 +28,10 @@
 - Local ML: an Olist late-delivery benchmark pipeline and ignored model artifact exist for non-commercial education. They are not connected to the application and are not suitable for operational predictions based on the documented error review.
 - Application prediction system: none. Shipment risk numbers remain manually entered.
 - Authentication: absent in current API/UI code; CRUD routes are publicly accessible.
-- SAP integrations: none configured or detected. The local model artifact is not an SAP integration.
-- Audit changes: documentation only. No application files changed and tests were not run.
+- SAP S/4HANA: read-only OData connector is implemented and tested for suppliers, products, purchase orders, and stock; no tenant credentials are configured and no live request has been verified.
+- SAP Integration Suite: trial subscription is active. The server supports an Integration Suite HTTP-flow base URL, but no flow has been deployed and no live request has been verified.
+- SAP BTP/Integration Suite is not reported as connected from subscription status alone.
+- The SAP OData connector and tests are local application changes; credentials remain absent from source and environment templates are placeholders.
 
 ## Phase 1 start review
 
