@@ -320,6 +320,16 @@ export default function OperationsHub({ dataset, page, onNavigate, onAlertCountC
   const [exchangeRateLoading, setExchangeRateLoading] = useState(true)
   const [rateRefresh, setRateRefresh] = useState(0)
   const [apiToken, setApiToken] = useState('')
+  const [sapInventory, setSapInventory] = useState<Array<{
+  item: string
+  detail: string
+  quantity: number
+  safetyStock: number
+  dailyDemand: number
+  suppliers: string[]
+}>>([])
+
+const [sapInventoryError, setSapInventoryError] = useState('')
   const [integrationStatus, setIntegrationStatus] = useState<{ aftership: boolean; writes: boolean } | null>(null)
   const [integrationError, setIntegrationError] = useState('')
   const [reorderProductId, setReorderProductId] = useState('')
