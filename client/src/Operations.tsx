@@ -330,6 +330,16 @@ export default function OperationsHub({ dataset, page, onNavigate, onAlertCountC
 }>>([])
 
 const [sapInventoryError, setSapInventoryError] = useState('')
+
+  useEffect(() => {
+  fetch('https://supplyshield-workspace-preview.onrender.com/api/inventory')
+    .then(response => {
+      if (!response.ok) throw new Error('Could not load SAP inventory')
+      return response.json()
+    })
+    .then(data => setSapInventory(data))
+    .catch(() => setSapInventoryError('Could not load SAP inventory'))
+}, [])
   const [integrationStatus, setIntegrationStatus] = useState<{ aftership: boolean; writes: boolean } | null>(null)
   const [integrationError, setIntegrationError] = useState('')
   const [reorderProductId, setReorderProductId] = useState('')
