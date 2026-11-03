@@ -770,6 +770,24 @@ export default function OperationsHub({ dataset, page, onNavigate, onAlertCountC
 
   function renderInventory() {
     return <div className="operations-stack">{pageHeader('COMMERCE · INVENTORY', 'Inventory', `${dataset.inventory.length.toLocaleString()} stock records joined to the product catalog.`)}
+            <Panel title="SAP Integration Suite Inventory" detail="Live records received from SAP via the SupplyShield API.">
+        {sapInventoryError && <p role="alert">{sapInventoryError}</p>}
+        {sapInventory.length === 0 && !sapInventoryError && <p>Loading SAP inventory…</p>}
+        {sapInventory.length > 0 && (
+          <Table headers={['ITEM', 'DETAIL', 'QUANTITY', 'SAFETY STOCK', 'DAILY DEMAND', 'SUPPLIERS']}>
+            {sapInventory.map((row, index) => (
+              <tr key={`${row.item}-${index}`}>
+                <td>{row.item}</td>
+                <td>{row.detail}</td>
+                <td>{row.quantity}</td>
+                <td>{row.safetyStock}</td>
+                <td>{row.dailyDemand}</td>
+                <td>{row.suppliers.join(', ')}</td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Panel>
       <div className="command-center-metrics"><Stat label="At/below reorder point" value={formatNumber(inventoryRows.filter(({ inventory }) => inventory.stock <= inventory.reorderPoint).length)} detail="Recorded stock threshold" icon={CircleAlert} tone="metric-tone-orange" /><Stat label="Inventory units" value={formatNumber(dataset.inventory.reduce((sum, row) => sum + row.stock, 0))} detail="Units across recorded products" icon={Package} /><Stat label="Average supplier lead" value={`${(dataset.inventory.reduce((sum, row) => sum + row.supplierLeadDays, 0) / Math.max(1, dataset.inventory.length)).toFixed(1)} days`} detail="Recorded supplier lead days" icon={Clock3} tone="metric-tone-violet" /></div>
       <Panel title="Stock records" detail="No stock quantities are invented or edited in this read-only dataset view." action={<button className="button button-outline button-small" onClick={() => exportInventory(filteredInventory)}><Download size={14} /> Export inventory</button>}>
         <div className="operations-filter-row">{searchFilter('Search product or warehouse')}{categoryFilter()}</div>
